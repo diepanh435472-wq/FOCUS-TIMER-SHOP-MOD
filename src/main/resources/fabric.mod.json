@@ -1,0 +1,36 @@
+{
+	"schemaVersion": 1,
+	"id": "focustimershop",
+	"version": "${version}",
+	"name": "Focus Timer Shop",
+	"description": "Transform focus time into rewards! Pomodoro timer with economy, shop, and gacha system.",
+	"authors": [
+		"FocusTimerShop Team"
+	],
+	"contact": {
+		"homepage": "https://github.com/focustimershop/focustimershop"
+	},
+	"license": "MIT",
+	"icon": "assets/focustimershop/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.focustimershop.FocusTimerShop"
+		],
+		"client": [
+			"com.focustimershop.FocusTimerShopClient"
+		]
+	},
+	"mixins": [
+		"focustimershop.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.15.0",
+		"minecraft": "~1.20.1",
+		"java": ">=17",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"another-mod": "*"
+	}
+}

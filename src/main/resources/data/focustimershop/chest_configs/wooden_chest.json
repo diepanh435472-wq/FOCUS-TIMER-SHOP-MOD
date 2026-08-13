@@ -1,0 +1,32 @@
+{
+  "chest_type": "wooden",
+  "cost": 40,
+  "currency": "silver",
+  "display_name": "Wooden Chest",
+  "rarity_weights": {
+    "common": 80,
+    "uncommon": 18,
+    "rare": 2,
+    "epic": 0,
+    "legendary": 0
+  },
+  "pools": {
+    "common": [
+      {"item": "minecraft:iron_ingot", "min": 1, "max": 4, "weight": 20},
+      {"item": "minecraft:copper_ingot", "min": 1, "max": 4, "weight": 25},
+      {"item": "minecraft:coal", "min": 1, "max": 8, "weight": 30},
+      {"item": "minecraft:bread", "min": 1, "max": 4, "weight": 15},
+      {"item": "minecraft:experience_bottle", "min": 1, "max": 2, "weight": 10},
+      {"item": "focustimershop:silver_coin_reward", "min": 5, "max": 20, "weight": 20}
+    ],
+    "uncommon": [
+      {"item": "minecraft:enchanted_book", "enchantment": "sharpness", "level": 1, "weight": 15},
+      {"item": "minecraft:enchanted_book", "enchantment": "efficiency", "level": 1, "weight": 15},
+      {"item": "minecraft:saddle", "weight": 10},
+      {"item": "minecraft:name_tag", "weight": 10}
+    ],
+    "rare": [],
+    "epic": [],
+    "legendary": []
+  }
+}

@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "com.focustimershop.mixin",
+	"compatibilityLevel": "JAVA_17",
+	"mixins": [
+		"EntityDataSaverMixin"
+	],
+	"client": [
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
