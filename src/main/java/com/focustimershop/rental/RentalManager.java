@@ -199,21 +199,216 @@ public class RentalManager {
 	}
 	
 	/**
-	 * Server tick - check for expired rentals
+	 * Server tick - check for expired rentals and cleanup
 	 */
 	public static void tick() {
 		long now = System.currentTimeMillis();
 		
 		activeRentals.entrySet().removeIf(entry -> {
 			RentalData rental = entry.getValue();
+			// Cleanup expired rentals
+			rental.cleanupExpired();
+			
 			if (!rental.hasActiveRental()) {
-				// Expired - notify if player online
-				// (Player notification handled in expireRental when they try to use)
+				// No active rentals left - save and remove from memory
 				saveRentalData(entry.getKey(), rental);
 				return true;
 			}
 			return false;
 		});
+	}
+	
+	/**
+	 * Tick down rental timers for all online players
+	 * Only decrements when player is online and game is NOT frozen (timer not running)
+	 * Called every second (20 ticks) from server
+	 */
+	public static void tickRentalTimers(net.minecraft.server.MinecraftServer server) {
+		for (net.minecraft.server.network.ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+			// Check if player has active timer running
+			boolean isTimerRunning = com.focustimershop.timer.TimerManager.hasActiveTimer(player.getUuid());
+			
+			// Only tick down rental timers when timer is NOT running
+			if (!isTimerRunning) {
+				tickPlayerRentalTools(player);
+				tickPlayerRentalData(player);
+			}
+		}
+	}
+	
+	/**
+	 * Tick down rental time on player's tools (NBT)
+	 */
+	private static void tickPlayerRentalTools(net.minecraft.server.network.ServerPlayerEntity player) {
+		for (int i = 0; i < player.getInventory().size(); i++) {
+			ItemStack stack = player.getInventory().getStack(i);
+			
+			if (stack.isEmpty() || !stack.hasNbt()) {
+				continue;
+			}
+			
+			NbtCompound nbt = stack.getNbt();
+			if (!nbt.contains("RentalType") || !nbt.contains("RemainingSeconds")) {
+				continue;
+			}
+			
+			int remainingSeconds = nbt.getInt("RemainingSeconds");
+			if (remainingSeconds > 0) {
+				remainingSeconds--;
+				nbt.putInt("RemainingSeconds", remainingSeconds);
+				
+				// Update lore to reflect new time
+				updateToolLore(stack, nbt, remainingSeconds);
+			}
+		}
+	}
+	
+	/**
+	 * Update tool lore with current remaining time
+	 */
+	private static void updateToolLore(ItemStack tool, NbtCompound nbt, int remainingSeconds) {
+		// Get tool config
+		boolean useFortuneMode = nbt.getBoolean("UseFortuneMode");
+		int fortuneLevel = nbt.getInt("CustomFortuneLevel");
+		int efficiencyLevel = nbt.getInt("CustomEfficiencyLevel");
+		int unbreakingLevel = nbt.getInt("CustomUnbreakingLevel");
+		int mendingLevel = nbt.getInt("CustomMendingLevel");
+		String rentalType = nbt.getString("RentalType");
+		
+		// Calculate time display
+		int hours = remainingSeconds / 3600;
+		int minutes = (remainingSeconds % 3600) / 60;
+		int secs = remainingSeconds % 60;
+		String timeDisplay = String.format("%dh %dm %ds", hours, minutes, secs);
+		
+		// Rebuild lore
+		NbtCompound display = nbt.getCompound("display");
+		if (!nbt.contains("display")) {
+			display = new NbtCompound();
+			nbt.put("display", display);
+		}
+		
+		net.minecraft.nbt.NbtList lore = new net.minecraft.nbt.NbtList();
+		
+		// Time
+		lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+			Text.literal("§7⏱ Còn lại: §e" + timeDisplay)
+		)));
+		
+		lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(Text.literal("§7-------------------"))));
+		
+		// Stats
+		if (useFortuneMode && fortuneLevel > 0) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§b✦ Gia Tài " + fortuneLevel)
+			)));
+		} else if (!useFortuneMode) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§b✦ Độ Mềm Mại")
+			)));
+		}
+		
+		if (efficiencyLevel > 0) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§b✦ Hiệu Suất " + efficiencyLevel)
+			)));
+		}
+		
+		if (unbreakingLevel > 0) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§b✦ Chậm Hỏng " + unbreakingLevel)
+			)));
+		}
+		
+		if (mendingLevel > 0) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§b✦ Sửa Chữa " + mendingLevel)
+			)));
+		}
+		
+		lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(Text.literal("§7-------------------"))));
+		
+		// Feature based on tool type
+		if (rentalType.equals("PICKAXE") || rentalType.equals("SHOVEL")) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§7Đào 3x3: §aĐè Shift")
+			)));
+		} else if (rentalType.equals("AXE")) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§7Chặt cây nhanh: §aĐè Shift")
+			)));
+		}
+		
+		display.put("Lore", lore);
+	}
+	
+	/**
+	 * Tick down rental time in player's RentalData
+	 */
+	private static void tickPlayerRentalData(net.minecraft.server.network.ServerPlayerEntity player) {
+		java.util.UUID playerId = player.getUuid();
+		RentalData rental = activeRentals.get(playerId);
+		
+		if (rental == null) {
+			rental = loadRentalData(playerId);
+			if (rental == null) {
+				return;
+			}
+		}
+		
+		// Tick down all active rentals
+		boolean changed = false;
+		for (RentalData.SingleRental singleRental : rental.getActiveRentals()) {
+			singleRental.tickDown();
+			changed = true;
+		}
+		
+		if (changed) {
+			activeRentals.put(playerId, rental);
+			saveRentalData(playerId, rental);
+		}
+	}
+	
+	/**
+	 * Check all online players for expired rental tools and remove them
+	 * Called every tick from server
+	 */
+	public static void checkAndRemoveExpiredTools(net.minecraft.server.MinecraftServer server) {
+		for (net.minecraft.server.network.ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+			checkPlayerInventoryForExpiredTools(player);
+		}
+	}
+	
+	/**
+	 * Check player's inventory for expired rental tools and remove them
+	 */
+	private static void checkPlayerInventoryForExpiredTools(net.minecraft.server.network.ServerPlayerEntity player) {
+		boolean foundExpired = false;
+		
+		// Check main inventory
+		for (int i = 0; i < player.getInventory().size(); i++) {
+			ItemStack stack = player.getInventory().getStack(i);
+			
+			if (stack.isEmpty() || !stack.hasNbt()) {
+				continue;
+			}
+			
+			NbtCompound nbt = stack.getNbt();
+			if (!nbt.contains("RentalType") || !nbt.contains("RemainingSeconds")) {
+				continue;
+			}
+			
+			int remainingSeconds = nbt.getInt("RemainingSeconds");
+			if (remainingSeconds <= 0) {
+				// Tool has expired - remove it
+				player.getInventory().removeStack(i);
+				foundExpired = true;
+			}
+		}
+		
+		if (foundExpired) {
+			player.sendMessage(Text.literal("§c⚠ Công cụ thuê của bạn đã hết hạn!"), false);
+		}
 	}
 	
 	/**
@@ -260,5 +455,216 @@ public class RentalManager {
 			saveRentalData(entry.getKey(), entry.getValue());
 		}
 		activeRentals.clear();
+	}
+	
+	/**
+	 * Handle rental request from client (Phase 3)
+	 */
+	public static void handleRentalRequest(net.minecraft.server.network.ServerPlayerEntity player,
+	                                       int toolIndex, boolean useFortuneMode, int fortuneLevel,
+	                                       int efficiencyLevel, int unbreakingLevel, int mendingLevel,
+	                                       int durationMinutes, boolean useSilverPayment) {
+		UUID playerId = player.getUuid();
+		
+		// FIX: Allow multiple rentals - only check for same tool type
+		String[] toolTypes = {"PICKAXE", "AXE", "SHOVEL"};
+		String requestedToolType = toolTypes[toolIndex];
+		
+		RentalData rental = activeRentals.get(playerId);
+		if (rental == null) {
+			rental = loadRentalData(playerId);
+			if (rental == null) {
+				rental = new RentalData(playerId);
+			}
+		}
+		
+		// Check if already renting THIS specific tool
+		RentalData.SingleRental existingRental = rental.getRentalByType(requestedToolType);
+		if (existingRental != null && existingRental.isActive()) {
+			player.sendMessage(Text.literal("§cBạn đã đang thuê " + requestedToolType + " rồi!"), false);
+			return;
+		}
+		
+		// Calculate cost (same formula as client)
+		int baseCost = 30;
+		int fortuneContribution = useFortuneMode ? (fortuneLevel * fortuneLevel) : 100;
+		int efficiencyContribution = efficiencyLevel * efficiencyLevel;
+		int unbreakingContribution = unbreakingLevel * unbreakingLevel;
+		int mendingContribution = mendingLevel * mendingLevel;
+		int statSum = fortuneContribution + efficiencyContribution + unbreakingContribution + mendingContribution;
+		int perBlockCost = baseCost + statSum;
+		int blocks = (int) Math.ceil(durationMinutes / 30.0);
+		int totalSilver = perBlockCost * blocks;
+		int totalGold = (int) Math.ceil(totalSilver / 100.0);
+		
+		// Check if player can afford
+		com.focustimershop.economy.PlayerEconomyData economy = 
+			com.focustimershop.economy.EconomyManager.getPlayerData(player);
+		
+		boolean canAfford = useSilverPayment ? 
+			(economy.getSilverCoins() >= totalSilver) :
+			(economy.getGoldCoins() >= totalGold);
+		
+		if (!canAfford) {
+			player.sendMessage(Text.literal("§cKhông đủ tiền để thuê!"), false);
+			return;
+		}
+		
+		// Deduct currency
+		if (useSilverPayment) {
+			economy.removeSilverCoins(totalSilver);
+		} else {
+			economy.removeGoldCoins(totalGold);
+		}
+		
+		com.focustimershop.economy.EconomyManager.savePlayerData(player);
+		com.focustimershop.economy.EconomyManager.syncToClient(player);
+		
+		// Add new rental (v1.0.6+ with remainingSeconds instead of endTime)
+		long now = System.currentTimeMillis();
+		rental.addRental(requestedToolType, now, durationMinutes * 60,
+		                 useFortuneMode ? fortuneLevel : 0, efficiencyLevel, 
+		                 unbreakingLevel, mendingLevel, !useFortuneMode);
+		
+		// Save to memory and disk
+		activeRentals.put(playerId, rental);
+		saveRentalData(playerId, rental);
+		
+		// Give tool to player (pass duration instead of endTime)
+		giveCustomRentalTool(player, rental, toolIndex, useFortuneMode, fortuneLevel, 
+		                     efficiencyLevel, unbreakingLevel, mendingLevel, durationMinutes * 60);
+		
+		String costMsg = useSilverPayment ? 
+			(totalSilver + " Silver") :
+			(totalGold + " Gold");
+		player.sendMessage(Text.literal("§aThuê thành công! Chi phí: " + costMsg), false);
+		
+		FocusTimerShop.LOGGER.info("Player {} rented {} for {}min ({})", 
+			player.getName().getString(), requestedToolType, durationMinutes, costMsg);
+	}
+	
+	/**
+	 * Give custom rental tool with NBT (Phase 3)
+	 */
+	private static void giveCustomRentalTool(net.minecraft.server.network.ServerPlayerEntity player,
+	                                          RentalData rental, int toolIndex, boolean useFortuneMode,
+	                                          int fortuneLevel, int efficiencyLevel, 
+	                                          int unbreakingLevel, int mendingLevel, int durationSeconds) {
+		// Tool items
+		net.minecraft.item.Item[] tools = {
+			Items.NETHERITE_PICKAXE,
+			Items.NETHERITE_AXE,
+			Items.NETHERITE_SHOVEL
+		};
+		String[] toolNames = {"Cuốc Amethyst", "Rìu Amethyst", "Xẻng Amethyst"};
+		
+		ItemStack tool = new ItemStack(tools[toolIndex]);
+		
+		// Set custom name
+		tool.setCustomName(Text.literal("§d§l[NETHERITE - ĐÃ THUÊ] §6" + toolNames[toolIndex]));
+		
+		// Add NBT data (v1.0.6+ with remainingSeconds instead of expiry timestamp)
+		NbtCompound nbt = tool.getOrCreateNbt();
+		String[] toolTypes = {"PICKAXE", "AXE", "SHOVEL"};
+		nbt.putString("RentalType", toolTypes[toolIndex]); // Use correct tool type
+		nbt.putString("RentalOwner", player.getUuidAsString());
+		nbt.putInt("RemainingSeconds", durationSeconds); // Store remaining time, not absolute timestamp
+		
+		// Store custom stats
+		nbt.putBoolean("UseFortuneMode", useFortuneMode);
+		nbt.putInt("CustomFortuneLevel", fortuneLevel);
+		nbt.putInt("CustomEfficiencyLevel", efficiencyLevel);
+		nbt.putInt("CustomUnbreakingLevel", unbreakingLevel);
+		nbt.putInt("CustomMendingLevel", mendingLevel);
+		
+		// Default config (Phase 4 will use these)
+		nbt.putInt("AreaSize", 1); // 1x1 for Pickaxe/Shovel
+		nbt.putBoolean("TreeChopping", false); // OFF for Axe
+		
+		// Add lore
+		NbtCompound display = nbt.getCompound("display");
+		if (!nbt.contains("display")) {
+			nbt.put("display", display);
+		}
+		
+		// FIX: Add REAL enchantments to the tool
+		if (useFortuneMode && fortuneLevel > 0) {
+			tool.addEnchantment(net.minecraft.enchantment.Enchantments.FORTUNE, fortuneLevel);
+		} else if (!useFortuneMode) {
+			tool.addEnchantment(net.minecraft.enchantment.Enchantments.SILK_TOUCH, 1);
+		}
+		
+		if (efficiencyLevel > 0) {
+			tool.addEnchantment(net.minecraft.enchantment.Enchantments.EFFICIENCY, efficiencyLevel);
+		}
+		
+		if (unbreakingLevel > 0) {
+			tool.addEnchantment(net.minecraft.enchantment.Enchantments.UNBREAKING, unbreakingLevel);
+		}
+		
+		if (mendingLevel > 0) {
+			tool.addEnchantment(net.minecraft.enchantment.Enchantments.MENDING, 1);
+		}
+		
+		net.minecraft.nbt.NbtList lore = new net.minecraft.nbt.NbtList();
+		
+		// Remaining time (detailed: hours:minutes:seconds)
+		int hours = durationSeconds / 3600;
+		int minutes = (durationSeconds % 3600) / 60;
+		int secs = durationSeconds % 60;
+		
+		String timeDisplay = String.format("%dh %dm %ds", hours, minutes, secs);
+		lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+			Text.literal("§7⏱ Còn lại: §e" + timeDisplay)
+		)));
+		
+		lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(Text.literal("§7-------------------"))));
+		
+		// Stats
+		if (useFortuneMode && fortuneLevel > 0) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§b✦ Gia Tài " + fortuneLevel)
+			)));
+		} else if (!useFortuneMode) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§b✦ Độ Mềm Mại")
+			)));
+		}
+		
+		if (efficiencyLevel > 0) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§b✦ Hiệu Suất " + efficiencyLevel)
+			)));
+		}
+		
+		if (unbreakingLevel > 0) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§b✦ Chậm Hỏng " + unbreakingLevel)
+			)));
+		}
+		
+		if (mendingLevel > 0) {
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§b✦ Sửa Chữa " + mendingLevel)
+			)));
+		}
+		
+		lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(Text.literal("§7-------------------"))));
+		
+		// Feature info based on tool type
+		if (toolIndex == 0 || toolIndex == 2) { // Pickaxe or Shovel
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§7Đào 3x3: §aĐè Shift")
+			)));
+		} else if (toolIndex == 1) { // Axe
+			lore.add(net.minecraft.nbt.NbtString.of(Text.Serializer.toJson(
+				Text.literal("§7Chặt cây nhanh: §aĐè Shift")
+			)));
+		}
+		
+		display.put("Lore", lore);
+		
+		// Give to player
+		player.giveItemStack(tool);
 	}
 }

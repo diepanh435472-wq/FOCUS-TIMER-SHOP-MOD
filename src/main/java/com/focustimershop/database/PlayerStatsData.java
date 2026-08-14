@@ -19,6 +19,7 @@ public class PlayerStatsData {
 	private int totalXpEarned = 0;
 	private int totalChestsOpened = 0;
 	private int totalItemsPurchased = 0;
+	private int totalBlocksMined = 0; // Track blocks mined with rental tools
 	
 	public PlayerStatsData() {}
 	
@@ -66,5 +67,17 @@ public class PlayerStatsData {
 	public int getTotalItemsPurchased() { return totalItemsPurchased; }
 	public void setTotalItemsPurchased(int totalItemsPurchased) { 
 		this.totalItemsPurchased = totalItemsPurchased; 
+	}
+	
+	public int getTotalBlocksMined() { return totalBlocksMined; }
+	public void setTotalBlocksMined(int totalBlocksMined) { 
+		this.totalBlocksMined = totalBlocksMined; 
+	}
+	
+	/**
+	 * Add blocks mined count (for 3x3 mining stats tracking)
+	 */
+	public void addBlocksMined(int count) {
+		this.totalBlocksMined += count;
 	}
 }

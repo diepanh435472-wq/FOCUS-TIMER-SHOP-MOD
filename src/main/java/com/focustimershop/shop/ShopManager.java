@@ -41,6 +41,59 @@ public class ShopManager {
 	/**
 	 * Initialize blacklist of forbidden items (creative-only, etc.)
 	 */
+	/**
+	 * Format enchantment name for display
+	 */
+	private static String formatEnchantmentName(String enchantmentName) {
+		// Convert snake_case to Title Case
+		String[] words = enchantmentName.split("_");
+		StringBuilder result = new StringBuilder();
+		for (String word : words) {
+			if (result.length() > 0) result.append(" ");
+			result.append(Character.toUpperCase(word.charAt(0)))
+				.append(word.substring(1));
+		}
+		return result.toString();
+	}
+
+	/**
+	 * Create an enchanted book ItemStack from enchanted_book:enchantment_name:level format
+	 */
+	private static ItemStack createEnchantedBook(String itemId) {
+		String[] parts = itemId.split(":");
+		if (parts.length != 3) {
+			FocusTimerShop.LOGGER.error("Invalid enchanted book format: {}", itemId);
+			return null;
+		}
+		
+		String enchantmentName = parts[1];
+		int level;
+		try {
+			level = Integer.parseInt(parts[2]);
+		} catch (NumberFormatException e) {
+			FocusTimerShop.LOGGER.error("Invalid enchantment level in: {}", itemId);
+			return null;
+		}
+		
+		// Create the enchanted book item
+		ItemStack stack = new ItemStack(Items.ENCHANTED_BOOK, 1);
+		
+		// Get the enchantment from registry
+		Identifier enchantmentId = new Identifier("minecraft", enchantmentName);
+		net.minecraft.enchantment.Enchantment enchantment = 
+			net.minecraft.registry.Registries.ENCHANTMENT.get(enchantmentId);
+		
+		if (enchantment == null) {
+			FocusTimerShop.LOGGER.error("Enchantment not found: {}", enchantmentName);
+			return null;
+		}
+		
+		// Add the enchantment to the book using the proper API for enchanted books
+		net.minecraft.item.EnchantedBookItem.addEnchantment(stack, new net.minecraft.enchantment.EnchantmentLevelEntry(enchantment, level));
+		
+		return stack;
+	}
+
 	private static void initializeBlacklist() {
 		blacklistedItems.add(Items.BEDROCK);
 		blacklistedItems.add(Items.COMMAND_BLOCK);
@@ -122,6 +175,27 @@ public class ShopManager {
 		for (java.util.Map.Entry<String, Integer> entry : priceList.getPrices().entrySet()) {
 			String itemId = entry.getKey();
 			int silverPrice = entry.getValue();
+			
+			// Check if this is an enchanted book (format: enchanted_book:enchantment_name:level)
+			if (itemId.startsWith("enchanted_book:")) {
+				String[] parts = itemId.split(":");
+				if (parts.length == 3) {
+					String enchantmentName = parts[1];
+					int level = Integer.parseInt(parts[2]);
+					
+					// Create display name for the enchanted book
+					String displayName = formatEnchantmentName(enchantmentName) + " " + level;
+					
+					// Store with full ID as key for lookup
+					shopItems.put(itemId, new ShopItem(itemId, category, silverPrice, 0, displayName));
+					count++;
+					continue;
+				} else {
+					FocusTimerShop.LOGGER.warn("Invalid enchanted book format: {}", itemId);
+					skipped++;
+					continue;
+				}
+			}
 			
 			// Extract minecraft:item_name -> item_name
 			String itemName = itemId;
@@ -217,12 +291,33 @@ public class ShopManager {
 
 		if (success) {
 			// Create item stack
-			Identifier id = new Identifier("minecraft", itemId);
-			Item item = Registries.ITEM.get(id);
-			ItemStack stack = new ItemStack(item, 1);
+			ItemStack stack;
+			
+			// Check if this is an enchanted book
+			if (itemId.startsWith("enchanted_book:")) {
+				stack = createEnchantedBook(itemId);
+				if (stack == null) {
+					player.sendMessage(Text.literal("§cFailed to create enchanted book!"), false);
+					// Refund the payment
+					if (useGold) {
+						economy.addGoldCoins(shopItem.getGoldCost());
+					} else {
+						economy.addSilverCoins(shopItem.getSilverPrice());
+					}
+					return;
+				}
+			} else {
+				// Regular item
+				Identifier id = new Identifier("minecraft", itemId);
+				Item item = Registries.ITEM.get(id);
+				stack = new ItemStack(item, 1);
+			}
 
-			// Drop item near player (not add to inventory)
-			player.dropItem(stack, false);
+			// Try to add to inventory first, drop remaining
+			if (!player.getInventory().insertStack(stack)) {
+				// Inventory full, drop item near player
+				player.dropItem(stack, false);
+			}
 
 			// Save and sync
 			EconomyManager.savePlayerData(player);
@@ -257,7 +352,7 @@ public class ShopManager {
 			String itemId = entry.getKey();
 			int quantity = entry.getValue();
 			
-			if (quantity <= 0 || quantity > 64) {
+			if (quantity <= 0) {
 				player.sendMessage(Text.literal("§cInvalid quantity for " + itemId), false);
 				return;
 			}
@@ -273,10 +368,29 @@ public class ShopManager {
 			totalCostSilver += itemCost * quantity;
 			
 			// Prepare item stacks
-			Identifier id = new Identifier("minecraft", itemId);
-			Item item = Registries.ITEM.get(id);
-			ItemStack stack = new ItemStack(item, quantity);
-			itemsToGive.add(stack);
+			if (itemId.startsWith("enchanted_book:")) {
+				// Create enchanted books one by one (they can't stack)
+				for (int i = 0; i < quantity; i++) {
+					ItemStack enchantedBook = createEnchantedBook(itemId);
+					if (enchantedBook == null) {
+						player.sendMessage(Text.literal("§cFailed to create enchanted book: " + itemId), false);
+						return;
+					}
+					itemsToGive.add(enchantedBook);
+				}
+			} else {
+				// FIX: Split into multiple stacks of 64 if quantity > 64
+				Identifier id = new Identifier("minecraft", itemId);
+				Item item = Registries.ITEM.get(id);
+				
+				int remaining = quantity;
+				while (remaining > 0) {
+					int stackSize = Math.min(remaining, 64);
+					ItemStack stack = new ItemStack(item, stackSize);
+					itemsToGive.add(stack);
+					remaining -= stackSize;
+				}
+			}
 		}
 		
 		// Mixed payment: convert silver cost to gold + silver
@@ -322,9 +436,12 @@ public class ShopManager {
 			return;
 		}
 		
-		// Give all items (spawn near player)
+		// Give all items (try inventory first, drop if full)
 		for (ItemStack stack : itemsToGive) {
-			player.dropItem(stack, false);
+			if (!player.getInventory().insertStack(stack)) {
+				// Inventory full, drop near player
+				player.dropItem(stack, false);
+			}
 		}
 		
 		// Save and sync

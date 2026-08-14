@@ -23,6 +23,12 @@ public class MainMenuScreen extends Screen {
 	private TimerTabScreen timerTab;
 	private ShopTabScreen shopTab;
 	private LuckyChestTabScreen chestTab;
+	private RentalTabScreen rentalTab;
+	
+	// Music icon position for click detection
+	private int musicIconX;
+	private int musicIconY;
+	private int musicIconWidth;
 
 	public MainMenuScreen() {
 		super(Text.literal("Focus Timer Shop"));
@@ -45,6 +51,9 @@ public class MainMenuScreen extends Screen {
 		}
 		if (chestTab == null) {
 			chestTab = new LuckyChestTabScreen(this);
+		}
+		if (rentalTab == null) {
+			rentalTab = new RentalTabScreen(this);
 		}
 
 		// Note: Sidebar buttons are now rendered manually in render() method
@@ -69,9 +78,6 @@ public class MainMenuScreen extends Screen {
 
 		// Economy display (top right) - horizontal layout with proper icons and colors
 		renderEconomyDisplay(context);
-		
-		// Music Player button (vinyl icon) - left of economy display
-		renderMusicPlayerButton(context, mouseX, mouseY);
 
 		// Render sidebar buttons
 		renderSidebarButtons(context, mouseX, mouseY);
@@ -89,9 +95,9 @@ public class MainMenuScreen extends Screen {
 		int tabHeight = 40;
 		int spacing = 5;
 
-		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.LUCKY_CHEST};
-		String[] icons = {"⏱", "🛒", "🎁"};
-		String[] labels = {"Timer", "Shop", "Lucky Chest"};
+		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.LUCKY_CHEST, GuiTab.RENTAL};
+		String[] icons = {"⏱", "🛒", "🎁", "🔧"};
+		String[] labels = {"Timer", "Shop", "Lucky Chest", "Thuê"};
 
 		for (int i = 0; i < tabs.length; i++) {
 			GuiTab tab = tabs[i];
@@ -127,12 +133,17 @@ public class MainMenuScreen extends Screen {
 		String silverIcon = "◉";  // Silver coin
 		String goldIcon = "◉";    // Gold coin  
 		String xpIcon = "✦";      // Star for XP
+		String musicIcon = "♪";   // Music note
 		
 		// Colors from spec
 		int silverColor = 0xFFC0C0C0;  // #C0C0C0
 		int goldColor = 0xFFFFD700;    // #FFD700
 		int xpColor = 0xFFFF8C00;      // #FF8C00
 		int separatorColor = 0xFF666666;
+		
+		// Music icon color - check if music is playing
+		boolean isMusicPlaying = com.focustimershop.music.MusicPlayerManager.isPlaying();
+		int musicColor = isMusicPlaying ? 0xFFFFD700 : 0xFF666666;  // Gold when playing, gray when muted/stopped
 		
 		// Get values
 		int silver = ClientDataCache.getSilverCoins();
@@ -153,8 +164,9 @@ public class MainMenuScreen extends Screen {
 		int separatorWidth = (int)(this.textRenderer.getWidth(separator) * scale);
 		int goldWidth = (int)(this.textRenderer.getWidth(goldText) * scale);
 		int xpWidth = (int)(this.textRenderer.getWidth(xpText) * scale);
+		int musicWidth = (int)(this.textRenderer.getWidth(musicIcon) * scale);
 		
-		int totalWidth = silverWidth + separatorWidth + goldWidth + separatorWidth + xpWidth;
+		int totalWidth = silverWidth + separatorWidth + goldWidth + separatorWidth + xpWidth + separatorWidth + musicWidth;
 		
 		// Position: top right with padding
 		int economyX = this.width - totalWidth - 20;
@@ -197,30 +209,27 @@ public class MainMenuScreen extends Screen {
 		matrices.scale(scale, scale, 1.0f);
 		context.drawText(this.textRenderer, xpText, (int)(currentX / scale), (int)(economyY / scale), xpColor, true);
 		matrices.pop();
+		currentX += xpWidth;
+		
+		// Separator 3
+		matrices.push();
+		matrices.scale(scale, scale, 1.0f);
+		context.drawText(this.textRenderer, separator, (int)(currentX / scale), (int)(economyY / scale), separatorColor, false);
+		matrices.pop();
+		currentX += separatorWidth;
+		
+		// Music icon (last in row)
+		matrices.push();
+		matrices.scale(scale, scale, 1.0f);
+		context.drawText(this.textRenderer, musicIcon, (int)(currentX / scale), (int)(economyY / scale), musicColor, true);
+		matrices.pop();
+		
+		// Store music icon position for click detection (in field variable)
+		this.musicIconX = currentX;
+		this.musicIconY = economyY;
+		this.musicIconWidth = musicWidth;
 	}
 	
-	private void renderMusicPlayerButton(DrawContext context, int mouseX, int mouseY) {
-		// Vinyl icon button (◉ with animated spin effect)
-		int btnSize = 30;
-		int btnX = this.width - 400;  // Left of economy display
-		int btnY = 15;
-		
-		boolean hovered = mouseX >= btnX && mouseX <= btnX + btnSize && 
-		                  mouseY >= btnY && mouseY <= btnY + btnSize;
-		
-		// Background
-		int bgColor = hovered ? 0xFF5A3A7A : 0xFF3A2A4A;
-		context.fill(btnX, btnY, btnX + btnSize, btnY + btnSize, bgColor);
-		
-		// Vinyl icon (music note ♪)
-		String icon = "♪";
-		int iconWidth = this.textRenderer.getWidth(icon);
-		int iconX = btnX + (btnSize - iconWidth) / 2;
-		int iconY = btnY + 10;
-		
-		context.drawText(this.textRenderer, icon, iconX, iconY, 0xFFFFD700, true);
-	}
-
 	private void renderCurrentTab(DrawContext context, int mouseX, int mouseY, float delta) {
 		int contentX = 150;
 		int contentY = 50;
@@ -236,6 +245,9 @@ public class MainMenuScreen extends Screen {
 				break;
 			case LUCKY_CHEST:
 				chestTab.render(context, contentX, contentY, contentWidth, contentHeight, mouseX, mouseY, delta);
+				break;
+			case RENTAL:
+				rentalTab.render(context, contentX, contentY, contentWidth, contentHeight, mouseX, mouseY, delta);
 				break;
 		}
 	}
@@ -254,13 +266,12 @@ public class MainMenuScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		// Check music player button first
-		int musicBtnX = this.width - 400;
-		int musicBtnY = 15;
-		int musicBtnSize = 30;
+		// Check music icon click (now in top bar with currency display)
+		float scale = 1.5f;
+		int iconHeight = (int)(this.textRenderer.fontHeight * scale);
 		
-		if (mouseX >= musicBtnX && mouseX <= musicBtnX + musicBtnSize &&
-		    mouseY >= musicBtnY && mouseY <= musicBtnY + musicBtnSize) {
+		if (mouseX >= musicIconX && mouseX <= musicIconX + musicIconWidth &&
+		    mouseY >= musicIconY && mouseY <= musicIconY + iconHeight) {
 			// Open music player
 			if (this.client != null) {
 				this.client.setScreen(new MusicPlayerScreen(this));
@@ -275,7 +286,7 @@ public class MainMenuScreen extends Screen {
 		int tabHeight = 40;
 		int spacing = 5;
 
-		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.LUCKY_CHEST};
+		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.LUCKY_CHEST, GuiTab.RENTAL};
 		for (int i = 0; i < tabs.length; i++) {
 			int btnY = tabY + i * (tabHeight + spacing);
 			if (mouseX >= sidebarX && mouseX <= sidebarX + tabWidth &&
@@ -301,6 +312,9 @@ public class MainMenuScreen extends Screen {
 				break;
 			case LUCKY_CHEST:
 				handled = chestTab.mouseClicked(mouseX, mouseY, button, contentX, contentY, contentWidth, contentHeight);
+				break;
+			case RENTAL:
+				handled = rentalTab.mouseClicked(mouseX, mouseY, button, contentX, contentY, contentWidth, contentHeight);
 				break;
 		}
 
@@ -362,6 +376,7 @@ public class MainMenuScreen extends Screen {
 	enum GuiTab {
 		TIMER,
 		SHOP,
-		LUCKY_CHEST
+		LUCKY_CHEST,
+		RENTAL
 	}
 }

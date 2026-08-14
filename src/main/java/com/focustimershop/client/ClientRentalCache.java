@@ -1,13 +1,50 @@
 package com.focustimershop.client;
 
+import com.focustimershop.database.RentalData;
+
 /**
  * Client-side cache for rental data (display only)
+ * v1.0.5: Supports multiple rentals
  */
 public class ClientRentalCache {
 	
+	// NEW v1.0.5: Store full rental data
+	private static RentalData rentalData = null;
+	
+	// LEGACY: Single rental fields (kept for backward compatibility)
 	private static boolean hasActiveRental = false;
 	private static String rentalType = null;
 	private static long rentalEndTime = 0;
+	
+	/**
+	 * Get full rental data (v1.0.5+)
+	 */
+	public static RentalData getRentalData() {
+		return rentalData;
+	}
+	
+	/**
+	 * Update full rental data (v1.0.5+)
+	 */
+	public static void setRentalData(RentalData data) {
+		rentalData = data;
+		
+		// Update legacy fields for backward compatibility
+		if (data != null && data.hasAnyActiveRental()) {
+			hasActiveRental = true;
+			// Get first active rental for legacy support
+			var activeRentals = data.getActiveRentals();
+			if (!activeRentals.isEmpty()) {
+				RentalData.SingleRental first = activeRentals.get(0);
+				rentalType = first.getRentalType();
+				rentalEndTime = first.getRentalEndTime();
+			}
+		} else {
+			hasActiveRental = false;
+			rentalType = null;
+			rentalEndTime = 0;
+		}
+	}
 	
 	public static boolean hasActiveRental() {
 		return hasActiveRental && System.currentTimeMillis() < rentalEndTime;

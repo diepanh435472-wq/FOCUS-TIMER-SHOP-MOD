@@ -24,7 +24,7 @@ import java.util.Map;
  */
 public class ShopTabScreen {
 	private final MainMenuScreen parent;
-	private ShopCategory selectedCategory = ShopCategory.BUILDING_BLOCKS;
+	private ShopCategory selectedCategory = ShopCategory.ALL;  // FIX: Default to ALL instead of BUILDING_BLOCKS
 	private int scrollOffset = 0;
 	private String searchQuery = "";
 	private ShoppingCart cart = new ShoppingCart();
@@ -34,12 +34,25 @@ public class ShopTabScreen {
 	private int lastContentWidth = 0;
 	private int lastContentHeight = 0;
 	
+	// ===== DOUBLE CLICK PREVENTION =====
+	private long lastClickTime = 0;
+	private static final long CLICK_COOLDOWN_MS = 300;  // 300ms cooldown between clicks
+	// ===================================
+	
 	// ===== TAB HORIZONTAL SCROLL =====
 	private int tabScrollOffset = 0;  // Horizontal scroll for category tabs
 	private boolean isDraggingTabs = false;
 	private double dragStartX = 0;
 	private int dragStartOffset = 0;
+	private static final int TAB_DRAG_THRESHOLD = 5;  // Minimum drag distance before scrolling (prevents accidental category switch)
 	// =================================
+	
+	// ===== GRID SCROLL (DRAG TO SCROLL) =====
+	private boolean isDraggingGrid = false;
+	private double gridDragStartY = 0;
+	private int gridDragStartOffset = 0;
+	private static final int GRID_DRAG_THRESHOLD = 3;
+	// ========================================
 	
 	// ===== GRID GEOMETRY CONSTANTS =====
 	private static final int GRID_ICON_SIZE = 32;
@@ -185,12 +198,7 @@ public class ShopTabScreen {
 		
 		context.disableScissor();
 		
-		// Scroll hint (if tabs overflow)
-		if (maxScroll > 0) {
-			String hint = "↔ Scroll";
-			int hintWidth = parent.getTextRenderer().getWidth(hint);
-			context.drawText(parent.getTextRenderer(), hint, x + width - hintWidth - 5, y - 12, 0xFF888888, false);
-		}
+		// Removed scroll hint - looks cleaner without it
 	}
 
 	private void renderItemGrid(DrawContext context, int x, int y, int width, int height, int mouseX, int mouseY) {
@@ -308,9 +316,29 @@ public class ShopTabScreen {
 			// Item row background
 			context.fill(x, currentY, x + width, currentY + lineHeight - 2, 0xFF1A1A1A);
 			
-			// Category + name
-			String displayText = "§7[" + item.getCategory().getShortName() + "] §f" + 
-			                     item.getDisplayName() + " §ex" + quantity;
+			// Category + name (truncate if too long)
+			String categoryPrefix = "§7[" + item.getCategory().getShortName() + "] §f";
+			String itemName = item.getDisplayName();
+			String quantitySuffix = " §ex" + quantity;
+			
+			// Calculate available width for item name
+			int prefixWidth = parent.getTextRenderer().getWidth(categoryPrefix.replaceAll("§.", ""));
+			int suffixWidth = parent.getTextRenderer().getWidth(quantitySuffix.replaceAll("§.", ""));
+			int availableWidth = width - prefixWidth - suffixWidth - 50; // 50 for buttons
+			
+			// Truncate item name if too long
+			String displayName = itemName;
+			int nameWidth = parent.getTextRenderer().getWidth(displayName);
+			if (nameWidth > availableWidth) {
+				// Trim and add "..."
+				while (nameWidth > availableWidth - 12 && displayName.length() > 0) {
+					displayName = displayName.substring(0, displayName.length() - 1);
+					nameWidth = parent.getTextRenderer().getWidth(displayName);
+				}
+				displayName += "...";
+			}
+			
+			String displayText = categoryPrefix + displayName + quantitySuffix;
 			context.drawText(parent.getTextRenderer(), displayText, x + 5, currentY + 5, 0xFFFFFFFF, false);
 			
 			// Buttons: [-] and [x]
@@ -568,21 +596,25 @@ public class ShopTabScreen {
 			isDraggingTabs = true;
 			dragStartX = mouseX;
 			dragStartOffset = tabScrollOffset;
-		}
-		
-		for (int i = 0; i < tabNames.length; i++) {
-			int tabX = contentX + 5 + i * (tabWidth + spacing) - tabScrollOffset;  // Apply scroll offset
-			if (mouseX >= tabX && mouseX <= tabX + tabWidth &&
-			    mouseY >= tabY && mouseY <= tabY + 25) {
-				selectedCategory = categories[i];
-				scrollOffset = 0;  // Reset scroll when changing category
-				return true;
-			}
+			
+			// Don't process tab clicks yet - wait to see if it's a drag or a click
+			// Will be processed in mouseReleased if drag distance < threshold
+			return true;
 		}
 		
 		// Check item grid clicks (add to cart) - match render coordinates
 		int gridY = contentY + 85;  // Match render: y + 85
 		int gridHeight = contentHeight - 90;
+		
+		// Check if clicking in grid area (for drag-to-scroll detection) - reuse leftPanelWidth
+		if (mouseY >= gridY && mouseY <= gridY + gridHeight && mouseX >= contentX && mouseX <= contentX + leftPanelWidth) {
+			isDraggingGrid = true;
+			gridDragStartY = mouseY;
+			gridDragStartOffset = scrollOffset;
+			
+			// Continue to check for item clicks below (will be processed in mouseReleased if drag < threshold)
+		}
+		
 		List<ShopItem> items = getFilteredItems();
 		
 		// ===== FIX: USE SHARED GRID GEOMETRY =====
@@ -605,7 +637,12 @@ public class ShopTabScreen {
 			
 			if (mouseX >= cellX && mouseX <= cellX + GRID_ICON_SIZE &&
 			    mouseY >= cellY && mouseY <= cellY + GRID_ICON_SIZE) {
-				cart.addItem(item.getItemId(), 1);
+				// FIX: Add click cooldown to prevent double-click
+				long currentTime = System.currentTimeMillis();
+				if (currentTime - lastClickTime >= CLICK_COOLDOWN_MS) {
+					cart.addItem(item.getItemId(), 1);
+					lastClickTime = currentTime;
+				}
 				return true;
 			}
 		}
@@ -732,22 +769,114 @@ public class ShopTabScreen {
 	}
 	
 	/**
-	 * Handle mouse release (stop dragging)
+	 * Handle mouse release (stop dragging and process clicks if drag was small)
 	 */
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
-		isDraggingTabs = false;
+		// Process tab click if drag distance was small (< threshold)
+		if (isDraggingTabs) {
+			double dragDistance = Math.abs(mouseX - dragStartX);
+			
+			if (dragDistance < TAB_DRAG_THRESHOLD) {
+				// Was a click, not a drag - process tab selection
+				int tabY = lastContentY + 50;
+				String[] tabNames = {"Tất cả", "Xây dựng", "Màu sắc", "Tự nhiên", "Chức năng", "Redstone", "Công cụ", "Đồ ăn", "Nguyên liệu"};
+				ShopCategory[] categories = {ShopCategory.ALL, ShopCategory.BUILDING_BLOCKS, ShopCategory.COLORED_BLOCKS, ShopCategory.NATURAL_BLOCKS, ShopCategory.FUNCTIONAL_BLOCKS, ShopCategory.REDSTONE, ShopCategory.TOOLS_UTILITIES, ShopCategory.FOOD_DRINKS, ShopCategory.INGREDIENTS};
+				int tabWidth = 80;
+				int spacing = 5;
+				
+				for (int i = 0; i < tabNames.length; i++) {
+					int tabX = lastContentX + 5 + i * (tabWidth + spacing) - tabScrollOffset;
+					if (mouseX >= tabX && mouseX <= tabX + tabWidth &&
+					    mouseY >= tabY && mouseY <= tabY + 25) {
+						selectedCategory = categories[i];
+						scrollOffset = 0;  // Reset scroll when changing category
+						break;
+					}
+				}
+			}
+			
+			isDraggingTabs = false;
+			return true;
+		}
+		
+		// Process grid item click if drag distance was small
+		if (isDraggingGrid) {
+			double dragDistance = Math.abs(mouseY - gridDragStartY);
+			
+			if (dragDistance < GRID_DRAG_THRESHOLD) {
+				// Was a click, not a drag - process item selection
+				int gridY = lastContentY + 85;
+				int gridHeight = lastContentHeight - 90;
+				List<ShopItem> items = getFilteredItems();
+				
+				int columns = getGridColumns(lastContentWidth);
+				int visibleRows = gridHeight / GRID_CELL_SIZE;
+				int startIndex = scrollOffset * columns;
+				int endIndex = Math.min(startIndex + visibleRows * columns, items.size());
+				
+				for (int i = startIndex; i < endIndex; i++) {
+					ShopItem item = items.get(i);
+					int index = i - startIndex;
+					int col = index % columns;
+					int row = index / columns;
+					
+					int cellX = lastContentX + 5 + col * GRID_CELL_SIZE;
+					int cellY = gridY + row * GRID_CELL_SIZE;
+					
+					if (mouseX >= cellX && mouseX <= cellX + GRID_ICON_SIZE &&
+					    mouseY >= cellY && mouseY <= cellY + GRID_ICON_SIZE) {
+						cart.addItem(item.getItemId(), 1);
+						break;
+					}
+				}
+			}
+			
+			isDraggingGrid = false;
+			return true;
+		}
+		
 		return false;
 	}
 	
 	/**
-	 * Handle mouse drag (move tabs)
+	 * Handle mouse drag (move tabs or scroll grid)
 	 */
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
 		if (isDraggingTabs) {
 			int dragDelta = (int)(mouseX - dragStartX);
 			tabScrollOffset = dragStartOffset - dragDelta;  // Drag opposite direction
+			
+			// Clamp scroll
+			String[] tabNames = {"Tất cả", "Xây dựng", "Màu sắc", "Tự nhiên", "Chức năng", "Redstone", "Công cụ", "Đồ ăn", "Nguyên liệu"};
+			int tabWidth = 80;
+			int spacing = 5;
+			int totalTabsWidth = tabNames.length * (tabWidth + spacing) - spacing;
+			int leftPanelWidth = getLeftPanelWidth(lastContentWidth);
+			int maxScroll = Math.max(0, totalTabsWidth - (leftPanelWidth - 10));
+			tabScrollOffset = Math.max(0, Math.min(tabScrollOffset, maxScroll));
+			
 			return true;
 		}
+		
+		if (isDraggingGrid) {
+			// Drag to scroll grid (vertical)
+			int dragDelta = (int)(mouseY - gridDragStartY);
+			int scrollDelta = -dragDelta / GRID_CELL_SIZE;  // Convert pixels to rows
+			
+			scrollOffset = gridDragStartOffset + scrollDelta;
+			
+			// Clamp scroll
+			int gridHeight = lastContentHeight - 90;
+			List<ShopItem> items = getFilteredItems();
+			int columns = getGridColumns(lastContentWidth);
+			int visibleRows = gridHeight / GRID_CELL_SIZE;
+			int totalRows = (int) Math.ceil((double) items.size() / columns);
+			int maxScroll = Math.max(0, totalRows - visibleRows);
+			scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+			
+			return true;
+		}
+		
 		return false;
 	}
 	

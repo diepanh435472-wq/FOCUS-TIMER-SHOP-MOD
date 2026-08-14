@@ -33,6 +33,7 @@ public class ModNetworking {
 	public static final Identifier CHEST_OPEN_BULK = new Identifier(FocusTimerShop.MOD_ID, "chest_open_bulk"); // x10+1 package
 	public static final Identifier CHEST_BULK_RESULT = new Identifier(FocusTimerShop.MOD_ID, "chest_bulk_result"); // Server sends 11 rewards to client
 	public static final Identifier SHOP_DATA_SYNC = new Identifier(FocusTimerShop.MOD_ID, "shop_data_sync"); // Server sends shop items to client on join
+	public static final Identifier RENTAL_REQUEST = new Identifier(FocusTimerShop.MOD_ID, "rental_request"); // Client requests tool rental
 
 	// Server-side packet handlers
 	public static void registerServerPackets() {
@@ -132,6 +133,25 @@ public class ModNetworking {
 			
 			server.execute(() -> {
 				LuckyChestManager.openChestBulk(player, chestType, requestId);
+			});
+		});
+		
+		// Tool rental request
+		ServerPlayNetworking.registerGlobalReceiver(RENTAL_REQUEST, (server, player, handler, buf, responseSender) -> {
+			int toolIndex = buf.readInt(); // 0=Pickaxe, 1=Axe, 2=Shovel
+			boolean useFortuneMode = buf.readBoolean();
+			int fortuneLevel = buf.readInt();
+			int efficiencyLevel = buf.readInt();
+			int unbreakingLevel = buf.readInt();
+			int mendingLevel = buf.readInt();
+			int durationMinutes = buf.readInt();
+			boolean useSilverPayment = buf.readBoolean();
+			
+			server.execute(() -> {
+				com.focustimershop.rental.RentalManager.handleRentalRequest(
+					player, toolIndex, useFortuneMode, fortuneLevel, efficiencyLevel,
+					unbreakingLevel, mendingLevel, durationMinutes, useSilverPayment
+				);
 			});
 		});
 	}
@@ -344,6 +364,24 @@ public class ModNetworking {
 		} catch (Exception e) {
 			FocusTimerShop.LOGGER.error("Failed to send CHEST_BULK_RESULT packet", e);
 		}
+	}
+	
+	/**
+	 * Send shop data to client on join
+	 */
+	public static void sendRentalRequest(int toolIndex, boolean useFortuneMode, int fortuneLevel,
+	                                     int efficiencyLevel, int unbreakingLevel, int mendingLevel,
+	                                     int durationMinutes, boolean useSilverPayment) {
+		PacketByteBuf buf = PacketByteBufs.create();
+		buf.writeInt(toolIndex);
+		buf.writeBoolean(useFortuneMode);
+		buf.writeInt(fortuneLevel);
+		buf.writeInt(efficiencyLevel);
+		buf.writeInt(unbreakingLevel);
+		buf.writeInt(mendingLevel);
+		buf.writeInt(durationMinutes);
+		buf.writeBoolean(useSilverPayment);
+		ClientPlayNetworking.send(RENTAL_REQUEST, buf);
 	}
 	
 	/**

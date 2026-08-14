@@ -23,6 +23,10 @@ public class FocusTimerShopClient implements ClientModInitializer {
 			FocusTimerShop.LOGGER.info("[CLIENT INIT] Initializing Music Player");
 			com.focustimershop.music.MusicPlayerManager.initialize();
 			
+			// DISABLED: Client-side lore updater (causes flickering)
+			// Server updates NBT directly, client just displays it
+			// com.focustimershop.client.RentalToolLoreUpdater.register();
+			
 			// Register keybinding - Right Shift
 			FocusTimerShop.LOGGER.info("[CLIENT INIT] Registering keybinding");
 			openMenuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -50,6 +54,7 @@ public class FocusTimerShopClient implements ClientModInitializer {
 			// Handle keybinding
 			FocusTimerShop.LOGGER.info("[CLIENT INIT] Registering tick events");
 			ClientTickEvents.END_CLIENT_TICK.register(client -> {
+				// Open main menu with Right Shift
 				while (openMenuKey.wasPressed()) {
 					if (client.player != null && client.currentScreen == null) {
 						client.setScreen(new MainMenuScreen());

@@ -22,14 +22,36 @@ public class FocusTimerShop implements ModInitializer {
 		
 		// Initialize rental system
 		com.focustimershop.rental.RentalManager.initialize();
+		
+		// Register area mining handler for rental tools
+		com.focustimershop.rental.AreaMiningHandler.register();
 
 		// Initialize networking
 		ModNetworking.registerServerPackets();
+		
+		// Register admin commands
+		net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
+			(dispatcher, registryAccess, environment) -> {
+				com.focustimershop.command.AdminCommands.register(dispatcher, registryAccess, environment);
+			}
+		);
 
 		// Register server tick handler for timer updates
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			TimerManager.tick(server);
 			com.focustimershop.rental.RentalManager.tick();
+			// Check for expired rental tools every tick (will remove from inventory)
+			com.focustimershop.rental.RentalManager.checkAndRemoveExpiredTools(server);
+		});
+		
+		// Register second-based tick for rental timers (only tick down when not frozen)
+		final int[] tickCounter = {0};
+		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			tickCounter[0]++;
+			if (tickCounter[0] >= 20) { // Every second
+				tickCounter[0] = 0;
+				com.focustimershop.rental.RentalManager.tickRentalTimers(server);
+			}
 		});
 
 		// Handle server shutdown - clear all data

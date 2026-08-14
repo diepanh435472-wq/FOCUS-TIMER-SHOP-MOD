@@ -1184,172 +1184,173 @@ public class PriceList {
 		list.prices.put("minecraft:torchflower_seeds", 10);
 		list.prices.put("minecraft:pitcher_pod", 10);
 		
-		// === ENCHANTED BOOKS - TOÀN BỘ (pricing theo rarity & utility) ===
-		// NOTE: Minecraft enchanted books use NBT, not separate item IDs
-		// This is pricing reference - actual implementation needs NBT handling
+		// === ENCHANTED BOOKS - TOÀN BỘ (All enchantments with all levels) ===
+		// ENCHANTED BOOKS
+		// Format: "enchanted_book:enchantment_name:level" 
+		// ShopManager will parse this and create proper enchanted books with stored_enchantments component
 		
 		// WEAPON ENCHANTMENTS
-		// Sharpness (sword/axe) - Common
-		for (int i = 1; i <= 5; i++) {
-			list.prices.put("minecraft:enchanted_book_sharpness_" + i, 50 + i * 10);
-		}
-		// Smite (sword/axe vs undead) - Common
-		for (int i = 1; i <= 5; i++) {
-			list.prices.put("minecraft:enchanted_book_smite_" + i, 50 + i * 10);
-		}
-		// Bane of Arthropods (sword/axe vs spiders) - Common
-		for (int i = 1; i <= 5; i++) {
-			list.prices.put("minecraft:enchanted_book_bane_of_arthropods_" + i, 40 + i * 8);
-		}
-		// Knockback (sword) - Common
-		for (int i = 1; i <= 2; i++) {
-			list.prices.put("minecraft:enchanted_book_knockback_" + i, 50 + i * 10);
-		}
-		// Fire Aspect (sword) - Uncommon
-		for (int i = 1; i <= 2; i++) {
-			list.prices.put("minecraft:enchanted_book_fire_aspect_" + i, 70 + i * 15);
-		}
-		// Looting (sword) - Rare
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_looting_" + i, 80 + i * 20);
-		}
-		// Sweeping Edge (sword, Java only) - Uncommon
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_sweeping_edge_" + i, 60 + i * 15);
-		}
+		list.prices.put("enchanted_book:sharpness:1", 60);
+		list.prices.put("enchanted_book:sharpness:2", 70);
+		list.prices.put("enchanted_book:sharpness:3", 80);
+		list.prices.put("enchanted_book:sharpness:4", 90);
+		list.prices.put("enchanted_book:sharpness:5", 100);
+		
+		list.prices.put("enchanted_book:smite:1", 60);
+		list.prices.put("enchanted_book:smite:2", 70);
+		list.prices.put("enchanted_book:smite:3", 80);
+		list.prices.put("enchanted_book:smite:4", 90);
+		list.prices.put("enchanted_book:smite:5", 100);
+		
+		list.prices.put("enchanted_book:bane_of_arthropods:1", 48);
+		list.prices.put("enchanted_book:bane_of_arthropods:2", 56);
+		list.prices.put("enchanted_book:bane_of_arthropods:3", 64);
+		list.prices.put("enchanted_book:bane_of_arthropods:4", 72);
+		list.prices.put("enchanted_book:bane_of_arthropods:5", 80);
+		
+		list.prices.put("enchanted_book:knockback:1", 60);
+		list.prices.put("enchanted_book:knockback:2", 70);
+		
+		list.prices.put("enchanted_book:fire_aspect:1", 85);
+		list.prices.put("enchanted_book:fire_aspect:2", 100);
+		
+		list.prices.put("enchanted_book:looting:1", 100);
+		list.prices.put("enchanted_book:looting:2", 120);
+		list.prices.put("enchanted_book:looting:3", 140);
+		
+		list.prices.put("enchanted_book:sweeping_edge:1", 75);
+		list.prices.put("enchanted_book:sweeping_edge:2", 90);
+		list.prices.put("enchanted_book:sweeping_edge:3", 105);
 		
 		// TOOL ENCHANTMENTS
-		// Efficiency (pickaxe/axe/shovel/hoe) - Common
-		for (int i = 1; i <= 5; i++) {
-			list.prices.put("minecraft:enchanted_book_efficiency_" + i, 50 + i * 10);
-		}
-		// Fortune (pickaxe/axe/shovel/hoe) - Rare
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_fortune_" + i, 80 + i * 20);
-		}
-		// Silk Touch (tools) - Very Rare
-		list.prices.put("minecraft:enchanted_book_silk_touch_1", 150);
+		list.prices.put("enchanted_book:efficiency:1", 60);
+		list.prices.put("enchanted_book:efficiency:2", 70);
+		list.prices.put("enchanted_book:efficiency:3", 80);
+		list.prices.put("enchanted_book:efficiency:4", 90);
+		list.prices.put("enchanted_book:efficiency:5", 100);
 		
-		// Unbreaking (all items) - Common
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_unbreaking_" + i, 70 + i * 15);
-		}
+		list.prices.put("enchanted_book:fortune:1", 100);
+		list.prices.put("enchanted_book:fortune:2", 120);
+		list.prices.put("enchanted_book:fortune:3", 140);
+		
+		list.prices.put("enchanted_book:silk_touch:1", 150);
+		
+		// UNIVERSAL
+		list.prices.put("enchanted_book:unbreaking:1", 85);
+		list.prices.put("enchanted_book:unbreaking:2", 100);
+		list.prices.put("enchanted_book:unbreaking:3", 115);
+		
+		list.prices.put("enchanted_book:mending:1", 500);  // 5 Gold - Most valuable
 		
 		// ARMOR ENCHANTMENTS
-		// Protection (all armor) - Common
-		for (int i = 1; i <= 4; i++) {
-			list.prices.put("minecraft:enchanted_book_protection_" + i, 50 + i * 10);
-		}
-		// Fire Protection (all armor) - Common
-		for (int i = 1; i <= 4; i++) {
-			list.prices.put("minecraft:enchanted_book_fire_protection_" + i, 50 + i * 10);
-		}
-		// Blast Protection (all armor) - Common
-		for (int i = 1; i <= 4; i++) {
-			list.prices.put("minecraft:enchanted_book_blast_protection_" + i, 50 + i * 10);
-		}
-		// Projectile Protection (all armor) - Common
-		for (int i = 1; i <= 4; i++) {
-			list.prices.put("minecraft:enchanted_book_projectile_protection_" + i, 50 + i * 10);
-		}
-		// Feather Falling (boots) - Uncommon
-		for (int i = 1; i <= 4; i++) {
-			list.prices.put("minecraft:enchanted_book_feather_falling_" + i, 60 + i * 12);
-		}
-		// Thorns (all armor) - Rare
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_thorns_" + i, 80 + i * 20);
-		}
-		// Respiration (helmet) - Uncommon
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_respiration_" + i, 60 + i * 15);
-		}
-		// Aqua Affinity (helmet) - Uncommon
-		list.prices.put("minecraft:enchanted_book_aqua_affinity_1", 80);
+		list.prices.put("enchanted_book:protection:1", 60);
+		list.prices.put("enchanted_book:protection:2", 70);
+		list.prices.put("enchanted_book:protection:3", 80);
+		list.prices.put("enchanted_book:protection:4", 90);
 		
-		// Depth Strider (boots) - Rare
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_depth_strider_" + i, 70 + i * 20);
-		}
-		// Frost Walker (boots) - Very Rare (treasure)
-		for (int i = 1; i <= 2; i++) {
-			list.prices.put("minecraft:enchanted_book_frost_walker_" + i, 100 + i * 20);
-		}
-		// Soul Speed (boots) - Very Rare (treasure, Nether)
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_soul_speed_" + i, 150 + i * 25);
-		}
-		// Swift Sneak (leggings) - Very Rare (treasure, Deep Dark)
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_swift_sneak_" + i, 150 + i * 25);
-		}
+		list.prices.put("enchanted_book:fire_protection:1", 60);
+		list.prices.put("enchanted_book:fire_protection:2", 70);
+		list.prices.put("enchanted_book:fire_protection:3", 80);
+		list.prices.put("enchanted_book:fire_protection:4", 90);
+		
+		list.prices.put("enchanted_book:blast_protection:1", 60);
+		list.prices.put("enchanted_book:blast_protection:2", 70);
+		list.prices.put("enchanted_book:blast_protection:3", 80);
+		list.prices.put("enchanted_book:blast_protection:4", 90);
+		
+		list.prices.put("enchanted_book:projectile_protection:1", 60);
+		list.prices.put("enchanted_book:projectile_protection:2", 70);
+		list.prices.put("enchanted_book:projectile_protection:3", 80);
+		list.prices.put("enchanted_book:projectile_protection:4", 90);
+		
+		list.prices.put("enchanted_book:feather_falling:1", 72);
+		list.prices.put("enchanted_book:feather_falling:2", 84);
+		list.prices.put("enchanted_book:feather_falling:3", 96);
+		list.prices.put("enchanted_book:feather_falling:4", 108);
+		
+		list.prices.put("enchanted_book:thorns:1", 100);
+		list.prices.put("enchanted_book:thorns:2", 120);
+		list.prices.put("enchanted_book:thorns:3", 140);
+		
+		list.prices.put("enchanted_book:respiration:1", 75);
+		list.prices.put("enchanted_book:respiration:2", 90);
+		list.prices.put("enchanted_book:respiration:3", 105);
+		
+		list.prices.put("enchanted_book:aqua_affinity:1", 80);
+		
+		list.prices.put("enchanted_book:depth_strider:1", 90);
+		list.prices.put("enchanted_book:depth_strider:2", 110);
+		list.prices.put("enchanted_book:depth_strider:3", 130);
+		
+		list.prices.put("enchanted_book:frost_walker:1", 120);
+		list.prices.put("enchanted_book:frost_walker:2", 140);
+		
+		list.prices.put("enchanted_book:soul_speed:1", 175);
+		list.prices.put("enchanted_book:soul_speed:2", 200);
+		list.prices.put("enchanted_book:soul_speed:3", 225);
+		
+		list.prices.put("enchanted_book:swift_sneak:1", 175);
+		list.prices.put("enchanted_book:swift_sneak:2", 200);
+		list.prices.put("enchanted_book:swift_sneak:3", 225);
 		
 		// BOW ENCHANTMENTS
-		// Power (bow) - Common
-		for (int i = 1; i <= 5; i++) {
-			list.prices.put("minecraft:enchanted_book_power_" + i, 50 + i * 10);
-		}
-		// Punch (bow) - Uncommon
-		for (int i = 1; i <= 2; i++) {
-			list.prices.put("minecraft:enchanted_book_punch_" + i, 50 + i * 10);
-		}
-		// Flame (bow) - Uncommon
-		list.prices.put("minecraft:enchanted_book_flame_1", 70);
-		// Infinity (bow) - Very Rare
-		list.prices.put("minecraft:enchanted_book_infinity_1", 120);
+		list.prices.put("enchanted_book:power:1", 60);
+		list.prices.put("enchanted_book:power:2", 70);
+		list.prices.put("enchanted_book:power:3", 80);
+		list.prices.put("enchanted_book:power:4", 90);
+		list.prices.put("enchanted_book:power:5", 100);
+		
+		list.prices.put("enchanted_book:punch:1", 60);
+		list.prices.put("enchanted_book:punch:2", 70);
+		
+		list.prices.put("enchanted_book:flame:1", 70);
+		list.prices.put("enchanted_book:infinity:1", 120);
 		
 		// CROSSBOW ENCHANTMENTS
-		// Quick Charge (crossbow) - Uncommon
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_quick_charge_" + i, 60 + i * 15);
-		}
-		// Multishot (crossbow) - Rare
-		list.prices.put("minecraft:enchanted_book_multishot_1", 100);
-		// Piercing (crossbow) - Common
-		for (int i = 1; i <= 4; i++) {
-			list.prices.put("minecraft:enchanted_book_piercing_" + i, 50 + i * 10);
-		}
+		list.prices.put("enchanted_book:quick_charge:1", 75);
+		list.prices.put("enchanted_book:quick_charge:2", 90);
+		list.prices.put("enchanted_book:quick_charge:3", 105);
+		
+		list.prices.put("enchanted_book:multishot:1", 100);
+		
+		list.prices.put("enchanted_book:piercing:1", 60);
+		list.prices.put("enchanted_book:piercing:2", 70);
+		list.prices.put("enchanted_book:piercing:3", 80);
+		list.prices.put("enchanted_book:piercing:4", 90);
 		
 		// TRIDENT ENCHANTMENTS
-		// Loyalty (trident) - Uncommon
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_loyalty_" + i, 70 + i * 20);
-		}
-		// Impaling (trident) - Common
-		for (int i = 1; i <= 5; i++) {
-			list.prices.put("minecraft:enchanted_book_impaling_" + i, 50 + i * 10);
-		}
-		// Riptide (trident) - Rare
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_riptide_" + i, 80 + i * 20);
-		}
-		// Channeling (trident) - Very Rare
-		list.prices.put("minecraft:enchanted_book_channeling_1", 120);
+		list.prices.put("enchanted_book:loyalty:1", 90);
+		list.prices.put("enchanted_book:loyalty:2", 110);
+		list.prices.put("enchanted_book:loyalty:3", 130);
+		
+		list.prices.put("enchanted_book:impaling:1", 60);
+		list.prices.put("enchanted_book:impaling:2", 70);
+		list.prices.put("enchanted_book:impaling:3", 80);
+		list.prices.put("enchanted_book:impaling:4", 90);
+		list.prices.put("enchanted_book:impaling:5", 100);
+		
+		list.prices.put("enchanted_book:riptide:1", 100);
+		list.prices.put("enchanted_book:riptide:2", 120);
+		list.prices.put("enchanted_book:riptide:3", 140);
+		
+		list.prices.put("enchanted_book:channeling:1", 120);
+		
 		
 		// FISHING ROD ENCHANTMENTS
-		// Luck of the Sea (fishing rod) - Uncommon
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_luck_of_the_sea_" + i, 60 + i * 15);
-		}
-		// Lure (fishing rod) - Uncommon
-		for (int i = 1; i <= 3; i++) {
-			list.prices.put("minecraft:enchanted_book_lure_" + i, 60 + i * 15);
-		}
+		list.prices.put("enchanted_book:luck_of_the_sea:1", 75);
+		list.prices.put("enchanted_book:luck_of_the_sea:2", 90);
+		list.prices.put("enchanted_book:luck_of_the_sea:3", 105);
 		
-		// UNIVERSAL ENCHANTMENTS
-		// Mending - ULTRA RARE (treasure only, most valuable)
-		list.prices.put("minecraft:enchanted_book_mending_1", 500);  // 5 Gold Coin
+		list.prices.put("enchanted_book:lure:1", 75);
+		list.prices.put("enchanted_book:lure:2", 90);
+		list.prices.put("enchanted_book:lure:3", 105);
 		
-		// Vanishing (any item) - Uncommon
-		list.prices.put("minecraft:enchanted_book_vanishing_curse_1", 10);  // Curse, cheap
-		
-		// CURSES (negative effects)
-		list.prices.put("minecraft:enchanted_book_curse_of_vanishing_1", 10);
-		list.prices.put("minecraft:enchanted_book_curse_of_binding_1", 10);
+		// CURSES
+		list.prices.put("enchanted_book:vanishing_curse:1", 10);
+		list.prices.put("enchanted_book:binding_curse:1", 10);
 		
 		// === BOOKS (base items) ===
 		list.prices.put("minecraft:book", 10);
-		list.prices.put("minecraft:enchanted_book", 50);  // Generic (no enchant)
 		list.prices.put("minecraft:writable_book", 15);
 		list.prices.put("minecraft:written_book", 20);
 		

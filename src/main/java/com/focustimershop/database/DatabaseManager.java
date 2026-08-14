@@ -292,4 +292,30 @@ public class DatabaseManager {
 	public static Path getStatsDir() { return STATS_DIR; }
 	public static Path getRentalsDir() { return RENTALS_DIR; }
 	public static Path getRoot() { return FCTMS_ROOT; }
+	
+	/**
+	 * Get player stats data
+	 */
+	public static PlayerStatsData getPlayerStats(java.util.UUID playerId) {
+		File file = STATS_DIR.resolve(playerId.toString() + "_stats.json").toFile();
+		PlayerStatsData data = readJson(file, PlayerStatsData.class);
+		
+		if (data == null) {
+			data = new PlayerStatsData(playerId);
+		}
+		
+		return data;
+	}
+	
+	/**
+	 * Save player stats data
+	 */
+	public static void savePlayerStats(PlayerStatsData stats) {
+		if (stats == null || stats.getPlayerUuid() == null) {
+			return;
+		}
+		
+		File file = STATS_DIR.resolve(stats.getPlayerUuid() + "_stats.json").toFile();
+		writeJson(file, stats);
+	}
 }

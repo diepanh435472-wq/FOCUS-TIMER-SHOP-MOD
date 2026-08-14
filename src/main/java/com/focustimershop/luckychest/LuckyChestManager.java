@@ -230,8 +230,13 @@ public class LuckyChestManager {
 		}
 		
 		// Deduct payment ONCE
-		boolean paymentSuccess = economy.removeSilverCoins(chosenOption.getSilverCoins()) &&
-		                         economy.removeGoldCoins(chosenOption.getGoldCoins());
+		boolean paymentSuccess = true;
+		if (chosenOption.getSilverCoins() > 0) {
+			paymentSuccess = paymentSuccess && economy.removeSilverCoins(chosenOption.getSilverCoins());
+		}
+		if (chosenOption.getGoldCoins() > 0) {
+			paymentSuccess = paymentSuccess && economy.removeGoldCoins(chosenOption.getGoldCoins());
+		}
 		
 		if (!paymentSuccess) {
 			player.sendMessage(Text.literal("§cPayment failed!"), false);
@@ -261,6 +266,13 @@ public class LuckyChestManager {
 		
 		// Send bulk result to client for grid display
 		ModNetworking.sendChestBulkResult(player, tier.getDisplayName(), rewards);
+		
+		// FIX: Actually give items to player!
+		for (ItemStack stack : rewards) {
+			if (stack != null && !stack.isEmpty()) {
+				player.dropItem(stack, false); // Drop near player
+			}
+		}
 		
 		// Save and sync economy
 		EconomyManager.savePlayerData(player);

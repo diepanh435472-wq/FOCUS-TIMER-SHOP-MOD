@@ -36,6 +36,19 @@ public class PlayerEconomyData {
 		return focusXp;
 	}
 
+	// Setters (admin commands only)
+	public void setSilverCoins(int amount) {
+		this.silverCoins = Math.max(0, amount);
+	}
+
+	public void setGoldCoins(int amount) {
+		this.goldCoins = Math.max(0, amount);
+	}
+
+	public void setFocusXp(int amount) {
+		this.focusXp = Math.max(0, amount);
+	}
+
 	// Add currency (server-side only, validates non-negative)
 	public void addSilverCoins(int amount) {
 		if (amount > 0) {
