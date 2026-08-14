@@ -34,6 +34,13 @@ public class ShopTabScreen {
 	private int lastContentWidth = 0;
 	private int lastContentHeight = 0;
 	
+	// ===== TAB HORIZONTAL SCROLL =====
+	private int tabScrollOffset = 0;  // Horizontal scroll for category tabs
+	private boolean isDraggingTabs = false;
+	private double dragStartX = 0;
+	private int dragStartOffset = 0;
+	// =================================
+	
 	// ===== GRID GEOMETRY CONSTANTS =====
 	private static final int GRID_ICON_SIZE = 32;
 	private static final int GRID_SPACING = 4;
@@ -138,14 +145,28 @@ public class ShopTabScreen {
 	}
 
 	private void renderCategoryTabs(DrawContext context, int x, int y, int width, int mouseX, int mouseY) {
-		String[] tabNames = {"Tất cả", "Xây dựng", "Màu sắc"};
-		ShopCategory[] categories = {ShopCategory.ALL, ShopCategory.BUILDING_BLOCKS, ShopCategory.COLORED_BLOCKS};
+		String[] tabNames = {"Tất cả", "Xây dựng", "Màu sắc", "Tự nhiên", "Chức năng", "Redstone", "Công cụ", "Đồ ăn", "Nguyên liệu"};
+		ShopCategory[] categories = {ShopCategory.ALL, ShopCategory.BUILDING_BLOCKS, ShopCategory.COLORED_BLOCKS, ShopCategory.NATURAL_BLOCKS, ShopCategory.FUNCTIONAL_BLOCKS, ShopCategory.REDSTONE, ShopCategory.TOOLS_UTILITIES, ShopCategory.FOOD_DRINKS, ShopCategory.INGREDIENTS};
 		
 		int tabWidth = 80;
 		int spacing = 5;
+		int totalTabsWidth = tabNames.length * (tabWidth + spacing) - spacing;
+		int maxScroll = Math.max(0, totalTabsWidth - width);
+		
+		// Clamp scroll offset
+		tabScrollOffset = Math.max(0, Math.min(tabScrollOffset, maxScroll));
+		
+		// Enable scissor (clip rendering outside bounds)
+		context.enableScissor(x, y, x + width, y + 25);
 		
 		for (int i = 0; i < tabNames.length; i++) {
-			int tabX = x + i * (tabWidth + spacing);
+			int tabX = x + i * (tabWidth + spacing) - tabScrollOffset;
+			
+			// Skip rendering if tab is outside visible area
+			if (tabX + tabWidth < x || tabX > x + width) {
+				continue;
+			}
+			
 			boolean selected = (selectedCategory == categories[i]);
 			boolean hovered = mouseX >= tabX && mouseX <= tabX + tabWidth &&
 			                  mouseY >= y && mouseY <= y + 25;
@@ -160,6 +181,15 @@ public class ShopTabScreen {
 			int textWidth = parent.getTextRenderer().getWidth(tabNames[i]);
 			int textX = tabX + (tabWidth - textWidth) / 2;
 			context.drawText(parent.getTextRenderer(), tabNames[i], textX, y + 8, 0xFFFFFFFF, false);
+		}
+		
+		context.disableScissor();
+		
+		// Scroll hint (if tabs overflow)
+		if (maxScroll > 0) {
+			String hint = "↔ Scroll";
+			int hintWidth = parent.getTextRenderer().getWidth(hint);
+			context.drawText(parent.getTextRenderer(), hint, x + width - hintWidth - 5, y - 12, 0xFF888888, false);
 		}
 	}
 
@@ -344,26 +374,40 @@ public class ShopTabScreen {
 	}
 
 	private void renderTotalCost(DrawContext context, int x, int y, int width) {
-		int total = cart.getTotalCost();
-		String currency = cart.isUsingSilver() ? "Silver" : "Gold";
-		int color = cart.isUsingSilver() ? 0xFFC0C0C0 : 0xFFFFD700;
+		int[] cost = cart.getTotalCostMixed();
+		int goldCost = cost[0];
+		int silverCost = cost[1];
 		
 		context.fill(x, y, x + width, y + 1, 0xFF4A4A4A);
 		context.drawText(parent.getTextRenderer(), "§7Tổng tiền:", x, y + 10, 0xFFAAAAAA, false);
 		
-		String totalText = total + " " + currency;
-		int textWidth = parent.getTextRenderer().getWidth(totalText);
-		context.drawText(parent.getTextRenderer(), totalText, x + width - textWidth, y + 10, color, true);
+		// Display mixed cost
+		String costText = cart.getTotalCostDisplay();
+		int textWidth = parent.getTextRenderer().getWidth(costText);
+		
+		// Color: gold if has gold, silver otherwise
+		int color = goldCost > 0 ? 0xFFFFD700 : 0xFFC0C0C0;
+		context.drawText(parent.getTextRenderer(), costText, x + width - textWidth, y + 10, color, true);
 	}
 
 	private void renderCheckoutButton(DrawContext context, int x, int y, int width, int mouseX, int mouseY) {
 		int btnHeight = 40;
 		
-		// Check if can afford
-		int total = cart.getTotalCost();
-		boolean canAfford = cart.isUsingSilver() ?
-			ClientDataCache.getSilverCoins() >= total :
-			ClientDataCache.getGoldCoins() >= total;
+		// Check if can afford (mixed payment)
+		int[] cost = cart.getTotalCostMixed();
+		int goldCost = cost[0];
+		int silverCost = cost[1];
+		
+		boolean canAfford;
+		if (cart.isUsingSilver()) {
+			// Silver mode: check total silver
+			canAfford = ClientDataCache.getSilverCoins() >= silverCost;
+		} else {
+			// Gold mode: check gold + silver separately
+			int playerGold = ClientDataCache.getGoldCoins();
+			int playerSilver = ClientDataCache.getSilverCoins();
+			canAfford = (playerGold >= goldCost) && (playerSilver >= silverCost);
+		}
 		
 		boolean empty = cart.isEmpty();
 		boolean enabled = !empty && canAfford;
@@ -513,13 +557,21 @@ public class ShopTabScreen {
 		
 		// Check category tabs - must match render coordinates exactly
 		int tabY = contentY + 50;
-		String[] tabNames = {"Tất cả", "Xây dựng", "Màu sắc"};
-		ShopCategory[] categories = {ShopCategory.ALL, ShopCategory.BUILDING_BLOCKS, ShopCategory.COLORED_BLOCKS};
+		String[] tabNames = {"Tất cả", "Xây dựng", "Màu sắc", "Tự nhiên", "Chức năng", "Redstone", "Công cụ", "Đồ ăn", "Nguyên liệu"};
+		ShopCategory[] categories = {ShopCategory.ALL, ShopCategory.BUILDING_BLOCKS, ShopCategory.COLORED_BLOCKS, ShopCategory.NATURAL_BLOCKS, ShopCategory.FUNCTIONAL_BLOCKS, ShopCategory.REDSTONE, ShopCategory.TOOLS_UTILITIES, ShopCategory.FOOD_DRINKS, ShopCategory.INGREDIENTS};
 		int tabWidth = 80;
 		int spacing = 5;
 		
+		// Check if clicking in tab area (for drag detection)
+		int leftPanelWidth = getLeftPanelWidth(contentWidth);
+		if (mouseY >= tabY && mouseY <= tabY + 25 && mouseX >= contentX && mouseX <= contentX + leftPanelWidth) {
+			isDraggingTabs = true;
+			dragStartX = mouseX;
+			dragStartOffset = tabScrollOffset;
+		}
+		
 		for (int i = 0; i < tabNames.length; i++) {
-			int tabX = contentX + 5 + i * (tabWidth + spacing);  // Match render: x + 5
+			int tabX = contentX + 5 + i * (tabWidth + spacing) - tabScrollOffset;  // Apply scroll offset
 			if (mouseX >= tabX && mouseX <= tabX + tabWidth &&
 			    mouseY >= tabY && mouseY <= tabY + 25) {
 				selectedCategory = categories[i];
@@ -621,11 +673,20 @@ public class ShopTabScreen {
 		
 		if (mouseX >= checkoutX && mouseX <= checkoutX + checkoutWidth &&
 		    mouseY >= checkoutY && mouseY <= checkoutY + checkoutHeight) {
-			// Check if can checkout
-			int total = cart.getTotalCost();
-			boolean canAfford = cart.isUsingSilver() ?
-				ClientDataCache.getSilverCoins() >= total :
-				ClientDataCache.getGoldCoins() >= total;
+			// Check if can checkout (mixed payment)
+			int[] cost = cart.getTotalCostMixed();
+			int goldCost = cost[0];
+			int silverCost = cost[1];
+			
+			boolean canAfford;
+			if (cart.isUsingSilver()) {
+				// Silver mode
+				canAfford = ClientDataCache.getSilverCoins() >= silverCost;
+			} else {
+				// Gold mode: check both currencies
+				canAfford = (ClientDataCache.getGoldCoins() >= goldCost) && 
+				            (ClientDataCache.getSilverCoins() >= silverCost);
+			}
 			
 			if (!cart.isEmpty() && canAfford) {
 				// Send checkout packet
@@ -640,7 +701,17 @@ public class ShopTabScreen {
 	}
 
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-		// Use saved dimensions from last render
+		// Check if scrolling over tabs area (horizontal scroll)
+		int tabY = lastContentY + 50;
+		int leftPanelWidth = getLeftPanelWidth(lastContentWidth);
+		
+		if (mouseY >= tabY && mouseY <= tabY + 25 && mouseX >= lastContentX && mouseX <= lastContentX + leftPanelWidth) {
+			// Horizontal scroll for tabs
+			tabScrollOffset -= (int)(verticalAmount * 20);  // Scroll tabs
+			return true;
+		}
+		
+		// Vertical scroll for item grid (existing logic)
 		int gridHeight = lastContentHeight - 90;
 		
 		List<ShopItem> items = getFilteredItems();
@@ -658,6 +729,26 @@ public class ShopTabScreen {
 		scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
 		
 		return true;
+	}
+	
+	/**
+	 * Handle mouse release (stop dragging)
+	 */
+	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		isDraggingTabs = false;
+		return false;
+	}
+	
+	/**
+	 * Handle mouse drag (move tabs)
+	 */
+	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+		if (isDraggingTabs) {
+			int dragDelta = (int)(mouseX - dragStartX);
+			tabScrollOffset = dragStartOffset - dragDelta;  // Drag opposite direction
+			return true;
+		}
+		return false;
 	}
 	
 	/**

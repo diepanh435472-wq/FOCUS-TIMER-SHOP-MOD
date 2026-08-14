@@ -41,6 +41,8 @@ public class TimerSession {
 	}
 
 	public void pause() {
+		// Force final tick to capture accurate elapsed time
+		finalTick();
 		this.state = TimerState.PAUSED;
 	}
 

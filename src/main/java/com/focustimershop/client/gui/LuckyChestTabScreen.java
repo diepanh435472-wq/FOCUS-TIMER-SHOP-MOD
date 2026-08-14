@@ -3,6 +3,7 @@ package com.focustimershop.client.gui;
 import com.focustimershop.client.ClientDataCache;
 import com.focustimershop.luckychest.ChestRarity;
 import com.focustimershop.luckychest.ChestTier;
+import com.focustimershop.luckychest.LootReward;
 import com.focustimershop.luckychest.LuckyChestManager;
 import com.focustimershop.luckychest.PaymentOption;
 import com.focustimershop.network.ModNetworking;
@@ -20,14 +21,13 @@ public class LuckyChestTabScreen {
 	private final MainMenuScreen parent;
 	private int selectedChestIndex = 0;
 	private boolean showDetailModal = false; // Modal state for "Xem thêm"
+	private int modalScrollOffset = 0; // Scroll position for modal content
 
 	public LuckyChestTabScreen(MainMenuScreen parent) {
 		this.parent = parent;
 	}
 
 	public void render(DrawContext context, int x, int y, int width, int height, int mouseX, int mouseY, float delta) {
-		System.out.println("[DEBUG-MODAL-RENDER] Bắt đầu vẽ frame. showDetailModal=" + showDetailModal);
-		
 		// Title
 		context.drawText(parent.getTextRenderer(), "Lucky Chest", x + 10, y + 10, 0xFFFFFFFF, true);
 		context.drawText(parent.getTextRenderer(), "§7Open chests for random rewards!", x + 10, y + 30, 0xFFAAAAAA, false);
@@ -41,17 +41,12 @@ public class LuckyChestTabScreen {
 		// Render modal if active (overlay on top of everything)
 		if (showDetailModal) {
 			// WHEN MODAL IS OPEN: Show ONLY modal with dimmed overlay
-			System.out.println("[DEBUG-MODAL-RENDER] Modal đang mở - chỉ vẽ modal, BỎ QUA chest selector");
-			System.out.println("[DEBUG-MODAL-RENDER] Vẽ overlay toàn màn hình: x=" + x + " y=" + y + " width=" + width + " height=" + height);
 			renderDetailModal(context, selectedTier, x, y, width, height, mouseX, mouseY);
-			System.out.println("[DEBUG-MODAL-RENDER] Đã vẽ xong modal");
 		} else {
 			// WHEN MODAL IS CLOSED: Show normal chest list + detail panel
-			System.out.println("[DEBUG-MODAL-RENDER] Modal đóng - vẽ chest selector + detail panel");
 			
 			// Left: Chest selector grid
 			renderChestSelector(context, x + 10, y + 50, leftWidth, mouseX, mouseY);
-			System.out.println("[DEBUG-MODAL-RENDER] Đã vẽ xong danh sách card rương (background)");
 
 			// Right: Selected chest details
 			int detailX = x + leftWidth + 20;
@@ -62,7 +57,7 @@ public class LuckyChestTabScreen {
 			context.fill(detailX - 5, detailY - 5, detailX + rightWidth + 5, detailY + detailHeight + 5, 0xFF1A1A1A);
 			context.fill(detailX, detailY, detailX + rightWidth, detailY + detailHeight, 0xFF2A2A2A);
 			
-			renderChestDetails(context, selectedTier, detailX + 10, detailY + 10, rightWidth - 20, detailHeight - 20);
+			renderChestDetails(context, selectedTier, detailX + 10, detailY + 10, rightWidth - 20, detailHeight - 20, mouseX, mouseY);
 		}
 	}
 
@@ -184,7 +179,7 @@ public class LuckyChestTabScreen {
 		}
 	}
 
-	private void renderChestDetails(DrawContext context, ChestTier tier, int x, int y, int width, int height) {
+	private void renderChestDetails(DrawContext context, ChestTier tier, int x, int y, int width, int height, int mouseX, int mouseY) {
 		// Chest name with larger font
 		context.drawText(parent.getTextRenderer(), "§l" + tier.getDisplayName(), x, y, 0xFFFFFFFF, true);
 
@@ -216,7 +211,20 @@ public class LuckyChestTabScreen {
 		
 		// "Xem thêm" link (underlined, clickable)
 		String viewMoreText = "§n§9Xem thêm";
-		context.drawText(parent.getTextRenderer(), viewMoreText, x + 5, rarityY + 5, 0xFF5599FF, false);
+		int viewMoreX = x + 5;
+		int viewMoreWidth = parent.getTextRenderer().getWidth("Xem thêm"); // Without formatting for width calc
+		boolean viewMoreHovered = mouseX >= viewMoreX && mouseX <= viewMoreX + viewMoreWidth &&
+		                          mouseY >= rarityY + 5 && mouseY <= rarityY + 5 + parent.getTextRenderer().fontHeight;
+		
+		// Highlight on hover with underline
+		if (viewMoreHovered) {
+			context.fill(viewMoreX, rarityY + 5 + parent.getTextRenderer().fontHeight + 1, 
+			             viewMoreX + viewMoreWidth, rarityY + 5 + parent.getTextRenderer().fontHeight + 2, 
+			             0xFF5599FF); // Blue underline
+		}
+		
+		context.drawText(parent.getTextRenderer(), viewMoreText, viewMoreX, rarityY + 5, 
+		                 viewMoreHovered ? 0xFF77BBFF : 0xFF5599FF, false);
 
 		// Two buttons: "Mở x1" and "Mở x10+1" with real pricing
 		int btnY = y + height - 50;
@@ -263,25 +271,46 @@ public class LuckyChestTabScreen {
 	}
 
 	/**
-	 * Render detail modal showing full rarity breakdown
-	 * (Item-level drop tables will be added in future update)
+	 * Format item/enchantment name: remove underscores and capitalize words
+	 */
+	private String formatName(String name) {
+		// Remove minecraft: prefix if present
+		if (name.contains(":")) {
+			name = name.substring(name.indexOf(":") + 1);
+		}
+		
+		// Replace underscores with spaces and capitalize each word
+		String[] words = name.split("_");
+		StringBuilder formatted = new StringBuilder();
+		for (String word : words) {
+			if (formatted.length() > 0) {
+				formatted.append(" ");
+			}
+			// Capitalize first letter
+			if (!word.isEmpty()) {
+				formatted.append(Character.toUpperCase(word.charAt(0)));
+				if (word.length() > 1) {
+					formatted.append(word.substring(1));
+				}
+			}
+		}
+		return formatted.toString();
+	}
+
+	/**
+	 * Render detail modal showing full rarity breakdown with item lists
 	 */
 	private void renderDetailModal(DrawContext context, ChestTier tier, int screenX, int screenY, int screenWidth, int screenHeight, int mouseX, int mouseY) {
-		System.out.println("[DEBUG-MODAL-RENDER] Có vẽ overlay phủ kín? = true");
-		System.out.println("[DEBUG-MODAL-RENDER] Toạ độ + kích thước overlay: x=" + screenX + " y=" + screenY + " width=" + screenWidth + " height=" + screenHeight);
-		
-		// Dimmed overlay background (FULL SCREEN - completely cover everything behind)
+		// Dimmed overlay background (FULL SCREEN)
 		context.fill(screenX, screenY, screenX + screenWidth, screenY + screenHeight, 0xDD000000);
 		
-		// Modal window (centered, 70% width, 80% height)
-		int modalWidth = (int)(screenWidth * 0.7);
-		int modalHeight = (int)(screenHeight * 0.8);
+		// Modal window (centered, 75% width, 85% height for more space)
+		int modalWidth = (int)(screenWidth * 0.75);
+		int modalHeight = (int)(screenHeight * 0.85);
 		int modalX = screenX + (screenWidth - modalWidth) / 2;
 		int modalY = screenY + (screenHeight - modalHeight) / 2;
 		
-		System.out.println("[DEBUG-MODAL-RENDER] Toạ độ + kích thước panel modal: x=" + modalX + " y=" + modalY + " width=" + modalWidth + " height=" + modalHeight);
-		
-		// Modal background (SOLID, not transparent)
+		// Modal background (SOLID)
 		context.fill(modalX, modalY, modalX + modalWidth, modalY + modalHeight, 0xFF1A1A1A);
 		context.fill(modalX + 2, modalY + 2, modalX + modalWidth - 2, modalY + modalHeight - 2, 0xFF2A2A2A);
 		
@@ -307,10 +336,17 @@ public class LuckyChestTabScreen {
 		// Separator
 		context.fill(modalX + 10, modalY + 30, modalX + modalWidth - 10, modalY + 32, 0xFF4A4A4A);
 		
-		// Content area
-		int contentY = modalY + 40;
+		// Scrollable content area
+		int contentStartY = modalY + 40;
 		int contentX = modalX + 15;
 		int contentWidth = modalWidth - 30;
+		int visibleHeight = modalHeight - 50; // Visible area height
+		
+		// Enable scissor for scrolling (clip content outside visible area)
+		context.enableScissor(modalX, contentStartY, modalX + modalWidth, modalY + modalHeight - 10);
+		
+		// Apply scroll offset
+		int contentY = contentStartY - modalScrollOffset;
 		
 		// Section: Drop Rates by Rarity
 		context.drawText(parent.getTextRenderer(), "§e§lXác suất theo độ hiếm:", contentX, contentY, 0xFFFFAA00, true);
@@ -325,35 +361,127 @@ public class LuckyChestTabScreen {
 				String rarityText = rarity.getDisplayName();
 				context.drawText(parent.getTextRenderer(), rarityText, contentX + 10, contentY, rarity.getColor(), true);
 				
-				// Percentage and progress bar
+				// Percentage aligned to right
 				String percentText = String.format("%.1f%%", chance);
 				int percentWidth = parent.getTextRenderer().getWidth(percentText);
 				context.drawText(parent.getTextRenderer(), percentText, contentX + contentWidth - percentWidth - 10, contentY, 0xFFFFFFFF, false);
 				
-				// Progress bar visualization
 				contentY += 16;
-				int barWidth = (int)(contentWidth * 0.8);
-				int barHeight = 6;
-				int barX = contentX + 10;
-				context.fill(barX, contentY, barX + barWidth, contentY + barHeight, 0xFF3A3A3A);
-				int fillWidth = (int)(barWidth * (chance / 100.0));
-				context.fill(barX, contentY, barX + fillWidth, contentY + barHeight, rarity.getColor());
 				
-				contentY += 12;
+				// ===== PROGRESS BAR WITH PROPER COLOR =====
+				int barWidth = (int)(contentWidth * 0.8);
+				int barHeight = 8;
+				int barX = contentX + 10;
+				
+				// Background (dark gray)
+				context.fill(barX, contentY, barX + barWidth, contentY + barHeight, 0xFF2A2A2A);
+				
+				// Filled portion based on % (using rarity color with FULL OPACITY)
+				int fillWidth = (int)(barWidth * (chance / 100.0));
+				int rarityColorOpaque = rarity.getColor() | 0xFF000000; // Force alpha to FF
+				context.fill(barX, contentY, barX + fillWidth, contentY + barHeight, rarityColorOpaque);
+				
+				// Border for clarity
+				context.fill(barX, contentY, barX + barWidth, contentY + 1, 0xFF5A5A5A); // Top
+				context.fill(barX, contentY + barHeight - 1, barX + barWidth, contentY + barHeight, 0xFF5A5A5A); // Bottom
+				
+				contentY += 14;
+				
+				// ===== ITEM LIST WITH GROUPING FOR ENCHANTED BOOKS =====
+				java.util.List<LootReward> items = LuckyChestManager.getLootPoolForRarity(rarity);
+				if (!items.isEmpty()) {
+					// Group enchanted books by enchantment type
+					java.util.Map<String, java.util.List<Integer>> enchantmentGroups = new java.util.LinkedHashMap<>();
+					java.util.List<LootReward> nonBookItems = new java.util.ArrayList<>();
+					
+					for (LootReward reward : items) {
+						if (reward.getItem() == net.minecraft.item.Items.ENCHANTED_BOOK && reward.getEnchantment() != null) {
+							String enchName = net.minecraft.registry.Registries.ENCHANTMENT.getId(reward.getEnchantment()).getPath();
+							enchantmentGroups.computeIfAbsent(enchName, k -> new java.util.ArrayList<>()).add(reward.getEnchantLevel());
+						} else {
+							nonBookItems.add(reward);
+						}
+					}
+					
+					// Render grouped enchanted books first
+					for (java.util.Map.Entry<String, java.util.List<Integer>> entry : enchantmentGroups.entrySet()) {
+						String enchName = entry.getKey();
+						java.util.List<Integer> levels = entry.getValue();
+						
+						// Sort levels
+						java.util.Collections.sort(levels);
+						
+						// Render book icon
+						net.minecraft.item.ItemStack bookStack = new net.minecraft.item.ItemStack(net.minecraft.item.Items.ENCHANTED_BOOK);
+						context.drawItem(bookStack, contentX + 15, contentY);
+						
+						// Render grouped name with formatted enchantment name
+						String levelRange = levels.size() == 1 ? String.valueOf(levels.get(0)) : 
+						                    (levels.get(0) + "-" + levels.get(levels.size() - 1));
+						String displayName = "§7" + formatName("enchanted_book") + " (" + formatName(enchName) + " " + levelRange + ")";
+						context.drawText(parent.getTextRenderer(), displayName, contentX + 35, contentY + 4, 0xFFCCCCCC, false);
+						
+						contentY += 18;
+					}
+					
+					// Render non-book items
+					int maxNonBookItems = Math.min(nonBookItems.size(), 8); // Show max 8 non-book items
+					for (int i = 0; i < maxNonBookItems; i++) {
+						LootReward reward = nonBookItems.get(i);
+						
+						// Render item icon
+						net.minecraft.item.ItemStack displayStack = reward.generateStack(new java.util.Random(0));
+						context.drawItem(displayStack, contentX + 15, contentY);
+						
+						// Render item name (formatted without underscores)
+						String rawName = net.minecraft.registry.Registries.ITEM.getId(reward.getItem()).getPath();
+						String formattedName = formatName(rawName);
+						
+						// Add count/range if applicable
+						if (reward.getMinCount() == reward.getMaxCount() && reward.getMinCount() > 1) {
+							formattedName += " x" + reward.getMinCount();
+						} else if (reward.getMinCount() != reward.getMaxCount()) {
+							formattedName += " x" + reward.getMinCount() + "-" + reward.getMaxCount();
+						}
+						
+						// Add enchantment if applicable
+						if (reward.getEnchantment() != null && reward.getEnchantLevel() > 0) {
+							String enchName = net.minecraft.registry.Registries.ENCHANTMENT.getId(reward.getEnchantment()).getPath();
+							formattedName += " (" + formatName(enchName) + " " + reward.getEnchantLevel() + ")";
+						}
+						
+						String itemName = "§7" + formattedName;
+						context.drawText(parent.getTextRenderer(), itemName, contentX + 35, contentY + 4, 0xFFCCCCCC, false);
+						
+						contentY += 18;
+					}
+					
+					// If more items exist, show "..." indicator
+					if (nonBookItems.size() > maxNonBookItems) {
+						context.drawText(parent.getTextRenderer(), "§7... và " + (nonBookItems.size() - maxNonBookItems) + " vật phẩm khác", 
+							contentX + 35, contentY, 0xFF888888, false);
+						contentY += 18;
+					}
+				}
+				
+				contentY += 10; // Space between rarities
 			}
 		}
 		
-		// Note about item-level drops
+		// Note section at bottom
 		contentY += 10;
 		context.fill(modalX + 15, contentY, modalX + modalWidth - 15, contentY + 1, 0xFF4A4A4A);
 		contentY += 10;
 		context.drawText(parent.getTextRenderer(), "§7Lưu ý:", contentX, contentY, 0xFFAAAAAA, false);
 		contentY += 16;
-		context.drawText(parent.getTextRenderer(), "§7• Mỗi rương cho 1 vật phẩm ngẫu nhiên", contentX + 5, contentY, 0xFF888888, false);
+		context.drawText(parent.getTextRenderer(), "§7• Mỗi rương cho 1 vật phẩm ngẫu nhiên từ pool theo độ hiếm", contentX + 5, contentY, 0xFF888888, false);
 		contentY += 14;
-		context.drawText(parent.getTextRenderer(), "§7• Vật phẩm cụ thể được chọn từ pool theo độ hiếm", contentX + 5, contentY, 0xFF888888, false);
+		context.drawText(parent.getTextRenderer(), "§7• Gói x10+1: mua 10 tặng 1 (11 lần mở độc lập)", contentX + 5, contentY, 0xFF888888, false);
 		contentY += 14;
-		context.drawText(parent.getTextRenderer(), "§7• Gói x10+1: mua 10 tặng 1 (11 lần mở)", contentX + 5, contentY, 0xFF888888, false);
+		context.drawText(parent.getTextRenderer(), "§7• Cuộn chuột để xem thêm", contentX + 5, contentY, 0xFF888888, false);
+		
+		// Disable scissor
+		context.disableScissor();
 	}
 
 	public boolean mouseClicked(double mouseX, double mouseY, int button, int contentX, int contentY, int contentWidth, int contentHeight) {
@@ -375,6 +503,7 @@ public class LuckyChestTabScreen {
 			if (mouseX >= closeX && mouseX <= closeX + closeWidth &&
 			    mouseY >= closeY && mouseY <= closeY + closeHeight) {
 				showDetailModal = false;
+				modalScrollOffset = 0; // Reset scroll when closing
 				return true;
 			}
 			
@@ -382,6 +511,7 @@ public class LuckyChestTabScreen {
 			if (mouseX < modalX || mouseX > modalX + modalWidth ||
 			    mouseY < modalY || mouseY > modalY + modalHeight) {
 				showDetailModal = false;
+				modalScrollOffset = 0; // Reset scroll when closing
 				return true;
 			}
 			
@@ -448,6 +578,7 @@ public class LuckyChestTabScreen {
 		if (mouseX >= viewMoreX && mouseX <= viewMoreX + viewMoreWidth &&
 		    mouseY >= viewMoreY && mouseY <= viewMoreY + parent.getTextRenderer().fontHeight) {
 			showDetailModal = true;
+			modalScrollOffset = 0; // Reset scroll when opening
 			return true;
 		}
 		
@@ -486,6 +617,25 @@ public class LuckyChestTabScreen {
 			return true;
 		}
 
+		return false;
+	}
+	
+	/**
+	 * Handle mouse scroll for modal scrolling
+	 */
+	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+		if (showDetailModal) {
+			// Scroll modal content
+			int scrollAmount = (int) (amount * 20); // 20 pixels per scroll tick
+			modalScrollOffset -= scrollAmount;
+			
+			// Clamp scroll offset (min 0, max determined by content height)
+			modalScrollOffset = Math.max(0, modalScrollOffset);
+			// Note: Max scroll is hard to calculate dynamically, let user scroll freely
+			// Content will just stop showing when reaching bottom
+			
+			return true; // Consume scroll event
+		}
 		return false;
 	}
 }

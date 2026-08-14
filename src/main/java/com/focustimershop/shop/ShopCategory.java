@@ -4,11 +4,14 @@ public enum ShopCategory {
 	ALL("Tất cả"),
 	BUILDING_BLOCKS("Xây dựng"),
 	COLORED_BLOCKS("Màu sắc"),
-	// Future categories for v1.0.2+
-	TOOLS("Công cụ"),
-	WEAPONS("Vũ khí"),
-	FOOD("Thức ăn"),
-	REDSTONE("Redstone");
+	NATURAL_BLOCKS("Tự nhiên"),
+	FUNCTIONAL_BLOCKS("Chức năng"),
+	REDSTONE("Redstone"),
+	TOOLS_UTILITIES("Công cụ & Tiện ích"),
+	FOOD_DRINKS("Đồ ăn & Thức uống"),
+	INGREDIENTS("Nguyên liệu"),
+	// Future categories
+	WEAPONS("Vũ khí");
 
 	private final String displayName;
 
@@ -25,10 +28,13 @@ public enum ShopCategory {
 			case ALL: return "All";
 			case BUILDING_BLOCKS: return "Xây dựng";
 			case COLORED_BLOCKS: return "Màu";
-			case TOOLS: return "Tool";
-			case WEAPONS: return "Weapon";
-			case FOOD: return "Food";
+			case NATURAL_BLOCKS: return "Tự nhiên";
+			case FUNCTIONAL_BLOCKS: return "Chức năng";
 			case REDSTONE: return "Red";
+			case TOOLS_UTILITIES: return "Công cụ";
+			case FOOD_DRINKS: return "Đồ ăn";
+			case INGREDIENTS: return "Nguyên liệu";
+			case WEAPONS: return "Weapon";
 			default: return "?";
 		}
 	}

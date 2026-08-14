@@ -288,4 +288,14 @@ public class LuckyChestManager {
 		
 		return probabilities;
 	}
+	
+	/**
+	 * Get loot pool for specific rarity (for UI display)
+	 * Returns list of possible rewards
+	 */
+	public static List<LootReward> getLootPoolForRarity(ChestRarity rarity) {
+		ensureInitialized();
+		List<LootReward> pool = lootPools.get(rarity);
+		return pool != null ? new ArrayList<>(pool) : new ArrayList<>();
+	}
 }

@@ -73,14 +73,26 @@ public class ShopManager {
 		System.out.println("[DEBUG-LỖI#3] ========== BẮT ĐẦU LOAD SHOP ITEMS ==========");
 		int buildingCount = loadItemsFromPriceList("building_blocks.json", ShopCategory.BUILDING_BLOCKS);
 		int coloredCount = loadItemsFromPriceList("colored_blocks.json", ShopCategory.COLORED_BLOCKS);
+		int naturalCount = loadItemsFromPriceList("natural_blocks.json", ShopCategory.NATURAL_BLOCKS);
+		int functionalCount = loadItemsFromPriceList("functional_blocks.json", ShopCategory.FUNCTIONAL_BLOCKS);
+		int redstoneCount = loadItemsFromPriceList("redstone_blocks.json", ShopCategory.REDSTONE);
+		int toolsCount = loadItemsFromPriceList("tools_utilities.json", ShopCategory.TOOLS_UTILITIES);
+		int foodCount = loadItemsFromPriceList("food_drinks.json", ShopCategory.FOOD_DRINKS);
+		int ingredientsCount = loadItemsFromPriceList("ingredients.json", ShopCategory.INGREDIENTS);
 		
 		System.out.println("[DEBUG-LỖI#3] ========== KẾT QUẢ LOAD ==========");
 		System.out.println("[DEBUG-LỖI#3] Building blocks: " + buildingCount + " items");
 		System.out.println("[DEBUG-LỖI#3] Colored blocks: " + coloredCount + " items");
+		System.out.println("[DEBUG-LỖI#3] Natural blocks: " + naturalCount + " items");
+		System.out.println("[DEBUG-LỖI#3] Functional blocks: " + functionalCount + " items");
+		System.out.println("[DEBUG-LỖI#3] Redstone blocks: " + redstoneCount + " items");
+		System.out.println("[DEBUG-LỖI#3] Tools & Utilities: " + toolsCount + " items");
+		System.out.println("[DEBUG-LỖI#3] Food & Drinks: " + foodCount + " items");
+		System.out.println("[DEBUG-LỖI#3] Ingredients: " + ingredientsCount + " items");
 		System.out.println("[DEBUG-LỖI#3] TỔNG CỘNG: " + shopItems.size() + " items trong map");
 		
-		FocusTimerShop.LOGGER.info("Loaded {} shop items ({} building, {} colored)", 
-			shopItems.size(), buildingCount, coloredCount);
+		FocusTimerShop.LOGGER.info("Loaded {} shop items ({} building, {} colored, {} natural, {} functional, {} redstone, {} tools, {} food, {} ingredients)", 
+			shopItems.size(), buildingCount, coloredCount, naturalCount, functionalCount, redstoneCount, toolsCount, foodCount, ingredientsCount);
 	}
 	
 	/**
@@ -238,7 +250,7 @@ public class ShopManager {
 		PlayerEconomyData economy = EconomyManager.getPlayerData(player);
 		
 		// Calculate total cost
-		int totalCost = 0;
+		int totalCostSilver = 0;
 		List<ItemStack> itemsToGive = new ArrayList<>();
 		
 		for (Map.Entry<String, Integer> entry : cartItems.entrySet()) {
@@ -256,9 +268,9 @@ public class ShopManager {
 				return;
 			}
 			
-			// Calculate cost
-			int itemCost = useSilver ? shopItem.getSilverPrice() : shopItem.getGoldCost();
-			totalCost += itemCost * quantity;
+			// Calculate cost (always in silver base)
+			int itemCost = shopItem.getSilverPrice();
+			totalCostSilver += itemCost * quantity;
 			
 			// Prepare item stacks
 			Identifier id = new Identifier("minecraft", itemId);
@@ -267,20 +279,43 @@ public class ShopManager {
 			itemsToGive.add(stack);
 		}
 		
-		// Check if can afford total
-		boolean canAfford = useSilver ? 
-			economy.getSilverCoins() >= totalCost :
-			economy.getGoldCoins() >= totalCost;
+		// Mixed payment: convert silver cost to gold + silver
+		int goldCost = 0;
+		int silverCost = totalCostSilver;
+		
+		if (!useSilver) {
+			// Gold mode: auto-convert (100 silver = 1 gold)
+			goldCost = totalCostSilver / 100;
+			silverCost = totalCostSilver % 100;
+		}
+		
+		// Check if can afford (mixed payment)
+		boolean canAfford;
+		if (useSilver) {
+			canAfford = economy.getSilverCoins() >= silverCost;
+		} else {
+			canAfford = (economy.getGoldCoins() >= goldCost) && (economy.getSilverCoins() >= silverCost);
+		}
 		
 		if (!canAfford) {
-			player.sendMessage(Text.literal("§cNot enough " + (useSilver ? "Silver" : "Gold") + " Coins! Need: " + totalCost), false);
+			String costMsg = useSilver ? 
+				silverCost + " Silver" :
+				(goldCost > 0 && silverCost > 0 ? goldCost + " Gold + " + silverCost + " Silver" :
+				 goldCost > 0 ? goldCost + " Gold" : silverCost + " Silver");
+			player.sendMessage(Text.literal("§cNot enough money! Need: " + costMsg), false);
 			return;
 		}
 		
-		// Deduct currency
-		boolean success = useSilver ? 
-			economy.removeSilverCoins(totalCost) :
-			economy.removeGoldCoins(totalCost);
+		// Deduct currency (mixed)
+		boolean success;
+		if (useSilver) {
+			success = economy.removeSilverCoins(silverCost);
+		} else {
+			// Gold mode: deduct both currencies
+			boolean goldSuccess = goldCost == 0 || economy.removeGoldCoins(goldCost);
+			boolean silverSuccess = silverCost == 0 || economy.removeSilverCoins(silverCost);
+			success = goldSuccess && silverSuccess;
+		}
 		
 		if (!success) {
 			player.sendMessage(Text.literal("§cTransaction failed!"), false);
@@ -296,8 +331,14 @@ public class ShopManager {
 		EconomyManager.savePlayerData(player);
 		EconomyManager.syncToClient(player);
 		
-		player.sendMessage(Text.literal("§aPurchased " + cartItems.size() + " items for " + totalCost + " " + (useSilver ? "Silver" : "Gold") + "!"), false);
-		FocusTimerShop.LOGGER.info("Player {} checked out {} items for {} {}", 
-			player.getName().getString(), cartItems.size(), totalCost, useSilver ? "silver" : "gold");
+		// Success message (mixed payment display)
+		String costMsg = useSilver ? 
+			silverCost + " Silver" :
+			(goldCost > 0 && silverCost > 0 ? goldCost + " Gold + " + silverCost + " Silver" :
+			 goldCost > 0 ? goldCost + " Gold" : silverCost + " Silver");
+		
+		player.sendMessage(Text.literal("§aPurchased " + cartItems.size() + " items for " + costMsg + "!"), false);
+		FocusTimerShop.LOGGER.info("Player {} checked out {} items for {} (mode: {})", 
+			player.getName().getString(), cartItems.size(), costMsg, useSilver ? "silver" : "gold");
 	}
 }

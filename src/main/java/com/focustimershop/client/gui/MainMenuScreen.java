@@ -69,6 +69,9 @@ public class MainMenuScreen extends Screen {
 
 		// Economy display (top right) - horizontal layout with proper icons and colors
 		renderEconomyDisplay(context);
+		
+		// Music Player button (vinyl icon) - left of economy display
+		renderMusicPlayerButton(context, mouseX, mouseY);
 
 		// Render sidebar buttons
 		renderSidebarButtons(context, mouseX, mouseY);
@@ -195,6 +198,28 @@ public class MainMenuScreen extends Screen {
 		context.drawText(this.textRenderer, xpText, (int)(currentX / scale), (int)(economyY / scale), xpColor, true);
 		matrices.pop();
 	}
+	
+	private void renderMusicPlayerButton(DrawContext context, int mouseX, int mouseY) {
+		// Vinyl icon button (◉ with animated spin effect)
+		int btnSize = 30;
+		int btnX = this.width - 400;  // Left of economy display
+		int btnY = 15;
+		
+		boolean hovered = mouseX >= btnX && mouseX <= btnX + btnSize && 
+		                  mouseY >= btnY && mouseY <= btnY + btnSize;
+		
+		// Background
+		int bgColor = hovered ? 0xFF5A3A7A : 0xFF3A2A4A;
+		context.fill(btnX, btnY, btnX + btnSize, btnY + btnSize, bgColor);
+		
+		// Vinyl icon (music note ♪)
+		String icon = "♪";
+		int iconWidth = this.textRenderer.getWidth(icon);
+		int iconX = btnX + (btnSize - iconWidth) / 2;
+		int iconY = btnY + 10;
+		
+		context.drawText(this.textRenderer, icon, iconX, iconY, 0xFFFFD700, true);
+	}
 
 	private void renderCurrentTab(DrawContext context, int mouseX, int mouseY, float delta) {
 		int contentX = 150;
@@ -229,7 +254,21 @@ public class MainMenuScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		// Check sidebar button clicks first
+		// Check music player button first
+		int musicBtnX = this.width - 400;
+		int musicBtnY = 15;
+		int musicBtnSize = 30;
+		
+		if (mouseX >= musicBtnX && mouseX <= musicBtnX + musicBtnSize &&
+		    mouseY >= musicBtnY && mouseY <= musicBtnY + musicBtnSize) {
+			// Open music player
+			if (this.client != null) {
+				this.client.setScreen(new MusicPlayerScreen(this));
+			}
+			return true;
+		}
+		
+		// Check sidebar button clicks
 		int sidebarX = 10;
 		int tabY = 60;
 		int tabWidth = 120;
@@ -276,8 +315,26 @@ public class MainMenuScreen extends Screen {
 	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
 		if (currentTab == GuiTab.SHOP) {
 			return shopTab.mouseScrolled(mouseX, mouseY, 0, amount);
+		} else if (currentTab == GuiTab.LUCKY_CHEST) {
+			return chestTab.mouseScrolled(mouseX, mouseY, amount);
 		}
 		return super.mouseScrolled(mouseX, mouseY, amount);
+	}
+	
+	@Override
+	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		if (currentTab == GuiTab.SHOP) {
+			return shopTab.mouseReleased(mouseX, mouseY, button);
+		}
+		return super.mouseReleased(mouseX, mouseY, button);
+	}
+	
+	@Override
+	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+		if (currentTab == GuiTab.SHOP) {
+			return shopTab.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+		}
+		return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
 	}
 	
 	@Override

@@ -19,6 +19,10 @@ public class FocusTimerShopClient implements ClientModInitializer {
 		FocusTimerShop.LOGGER.info("[CLIENT INIT] Starting Focus Timer Shop Client initialization");
 
 		try {
+			// Initialize Music Player
+			FocusTimerShop.LOGGER.info("[CLIENT INIT] Initializing Music Player");
+			com.focustimershop.music.MusicPlayerManager.initialize();
+			
 			// Register keybinding - Right Shift
 			FocusTimerShop.LOGGER.info("[CLIENT INIT] Registering keybinding");
 			openMenuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(

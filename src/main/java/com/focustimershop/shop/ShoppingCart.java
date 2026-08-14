@@ -83,14 +83,50 @@ public class ShoppingCart {
 			// Use ClientDataCache instead of ShopManager (client-side!)
 			ShopItem item = ClientDataCache.getShopItem(itemId);
 			if (item != null) {
-				if (useSilver) {
-					total += item.getSilverPrice() * quantity;
-				} else {
-					total += item.getGoldCost() * quantity;
-				}
+				total += item.getSilverPrice() * quantity;
 			}
 		}
 		return total;
+	}
+	
+	/**
+	 * Get total cost breakdown for mixed payment (Gold mode)
+	 * Returns [goldCoins, silverCoins]
+	 */
+	public int[] getTotalCostMixed() {
+		int totalSilver = getTotalCost();
+		if (useSilver) {
+			// Silver mode: all silver
+			return new int[]{0, totalSilver};
+		} else {
+			// Gold mode: convert to gold + silver
+			int goldCoins = totalSilver / 100;
+			int silverCoins = totalSilver % 100;
+			return new int[]{goldCoins, silverCoins};
+		}
+	}
+	
+	/**
+	 * Get display string for total cost
+	 */
+	public String getTotalCostDisplay() {
+		int[] cost = getTotalCostMixed();
+		int gold = cost[0];
+		int silver = cost[1];
+		
+		if (useSilver) {
+			// Silver mode: only show silver
+			return silver + " Silver";
+		} else {
+			// Gold mode: show mixed
+			if (gold > 0 && silver > 0) {
+				return gold + " Gold + " + silver + " Silver";
+			} else if (gold > 0) {
+				return gold + " Gold";
+			} else {
+				return silver + " Silver";
+			}
+		}
 	}
 	
 	/**

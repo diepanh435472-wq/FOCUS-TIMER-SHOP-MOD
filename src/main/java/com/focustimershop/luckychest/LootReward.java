@@ -59,4 +59,45 @@ public class LootReward {
 	public static LootReward enchantedItem(Item item, Enchantment enchantment, int level) {
 		return new LootReward(item, 1, 1, enchantment, level);
 	}
+	
+	// Getters for UI display
+	public Item getItem() {
+		return item;
+	}
+	
+	public int getMinCount() {
+		return minCount;
+	}
+	
+	public int getMaxCount() {
+		return maxCount;
+	}
+	
+	public Enchantment getEnchantment() {
+		return enchantment;
+	}
+	
+	public int getEnchantLevel() {
+		return enchantLevel;
+	}
+	
+	/**
+	 * Get display name for UI (item name + enchantment if any)
+	 */
+	public String getDisplayName() {
+		String baseName = Registries.ITEM.getId(item).getPath();
+		
+		if (enchantment != null && enchantLevel > 0) {
+			String enchName = Registries.ENCHANTMENT.getId(enchantment).getPath();
+			return baseName + " (" + enchName + " " + enchantLevel + ")";
+		}
+		
+		if (minCount == maxCount && minCount > 1) {
+			return baseName + " x" + minCount;
+		} else if (minCount != maxCount) {
+			return baseName + " x" + minCount + "-" + maxCount;
+		}
+		
+		return baseName;
+	}
 }

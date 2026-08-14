@@ -118,6 +118,126 @@ public class DatabaseManager {
 			FocusTimerShop.LOGGER.info("Generated colored_blocks.json with {} entries", defaultPrices.getPrices().size());
 		}
 		
+		// Natural blocks prices - NEW CATEGORY v1.0.4
+		File naturalPrices = PRICES_DIR.resolve("natural_blocks.json").toFile();
+		boolean needRegenerateNatural = !naturalPrices.exists();
+		
+		if (naturalPrices.exists()) {
+			PriceList existing = readJson(naturalPrices, PriceList.class);
+			if (existing == null || !existing.getVersion().equals("1.0.2") || existing.getPrices().size() < 150) {
+				FocusTimerShop.LOGGER.warn("natural_blocks.json outdated (version={}, entries={}), regenerating...",
+					existing != null ? existing.getVersion() : "null",
+					existing != null ? existing.getPrices().size() : 0);
+				needRegenerateNatural = true;
+			}
+		}
+		
+		if (needRegenerateNatural) {
+			PriceList defaultPrices = PriceList.createNaturalBlocksDefaults();
+			writeJson(naturalPrices, defaultPrices);
+			FocusTimerShop.LOGGER.info("Generated natural_blocks.json with {} entries", defaultPrices.getPrices().size());
+		}
+		
+		// Functional blocks prices - NEW CATEGORY v1.0.4
+		File functionalPrices = PRICES_DIR.resolve("functional_blocks.json").toFile();
+		boolean needRegenerateFunctional = !functionalPrices.exists();
+		
+		if (functionalPrices.exists()) {
+			PriceList existing = readJson(functionalPrices, PriceList.class);
+			if (existing == null || !existing.getVersion().equals("1.0.2") || existing.getPrices().size() < 80) {
+				FocusTimerShop.LOGGER.warn("functional_blocks.json outdated (version={}, entries={}), regenerating...",
+					existing != null ? existing.getVersion() : "null",
+					existing != null ? existing.getPrices().size() : 0);
+				needRegenerateFunctional = true;
+			}
+		}
+		
+		if (needRegenerateFunctional) {
+			PriceList defaultPrices = PriceList.createFunctionalBlocksDefaults();
+			writeJson(functionalPrices, defaultPrices);
+			FocusTimerShop.LOGGER.info("Generated functional_blocks.json with {} entries", defaultPrices.getPrices().size());
+		}
+		
+		// Redstone blocks prices - NEW CATEGORY v1.0.4
+		File redstonePrices = PRICES_DIR.resolve("redstone_blocks.json").toFile();
+		boolean needRegenerateRedstone = !redstonePrices.exists();
+		
+		if (redstonePrices.exists()) {
+			PriceList existing = readJson(redstonePrices, PriceList.class);
+			if (existing == null || !existing.getVersion().equals("1.0.2") || existing.getPrices().size() < 50) {
+				FocusTimerShop.LOGGER.warn("redstone_blocks.json outdated (version={}, entries={}), regenerating...",
+					existing != null ? existing.getVersion() : "null",
+					existing != null ? existing.getPrices().size() : 0);
+				needRegenerateRedstone = true;
+			}
+		}
+		
+		if (needRegenerateRedstone) {
+			PriceList defaultPrices = PriceList.createRedstoneBlocksDefaults();
+			writeJson(redstonePrices, defaultPrices);
+			FocusTimerShop.LOGGER.info("Generated redstone_blocks.json with {} entries", defaultPrices.getPrices().size());
+		}
+		
+		// Tools & utilities prices - NEW CATEGORY v1.0.4
+		File toolsPrices = PRICES_DIR.resolve("tools_utilities.json").toFile();
+		boolean needRegenerateTools = !toolsPrices.exists();
+		
+		if (toolsPrices.exists()) {
+			PriceList existing = readJson(toolsPrices, PriceList.class);
+			if (existing == null || !existing.getVersion().equals("1.0.2") || existing.getPrices().size() < 100) {
+				FocusTimerShop.LOGGER.warn("tools_utilities.json outdated (version={}, entries={}), regenerating...",
+					existing != null ? existing.getVersion() : "null",
+					existing != null ? existing.getPrices().size() : 0);
+				needRegenerateTools = true;
+			}
+		}
+		
+		if (needRegenerateTools) {
+			PriceList defaultPrices = PriceList.createToolsUtilitiesDefaults();
+			writeJson(toolsPrices, defaultPrices);
+			FocusTimerShop.LOGGER.info("Generated tools_utilities.json with {} entries", defaultPrices.getPrices().size());
+		}
+		
+		// Food & drinks prices - NEW CATEGORY v1.0.4
+		File foodPrices = PRICES_DIR.resolve("food_drinks.json").toFile();
+		boolean needRegenerateFood = !foodPrices.exists();
+		
+		if (foodPrices.exists()) {
+			PriceList existing = readJson(foodPrices, PriceList.class);
+			if (existing == null || !existing.getVersion().equals("1.0.2") || existing.getPrices().size() < 30) {
+				FocusTimerShop.LOGGER.warn("food_drinks.json outdated (version={}, entries={}), regenerating...",
+					existing != null ? existing.getVersion() : "null",
+					existing != null ? existing.getPrices().size() : 0);
+				needRegenerateFood = true;
+			}
+		}
+		
+		if (needRegenerateFood) {
+			PriceList defaultPrices = PriceList.createFoodDrinksDefaults();
+			writeJson(foodPrices, defaultPrices);
+			FocusTimerShop.LOGGER.info("Generated food_drinks.json with {} entries", defaultPrices.getPrices().size());
+		}
+		
+		// Ingredients prices - NEW CATEGORY v1.0.4
+		File ingredientsPrices = PRICES_DIR.resolve("ingredients.json").toFile();
+		boolean needRegenerateIngredients = !ingredientsPrices.exists();
+		
+		if (ingredientsPrices.exists()) {
+			PriceList existing = readJson(ingredientsPrices, PriceList.class);
+			if (existing == null || !existing.getVersion().equals("1.0.2") || existing.getPrices().size() < 80) {
+				FocusTimerShop.LOGGER.warn("ingredients.json outdated (version={}, entries={}), regenerating...",
+					existing != null ? existing.getVersion() : "null",
+					existing != null ? existing.getPrices().size() : 0);
+				needRegenerateIngredients = true;
+			}
+		}
+		
+		if (needRegenerateIngredients) {
+			PriceList defaultPrices = PriceList.createIngredientsDefaults();
+			writeJson(ingredientsPrices, defaultPrices);
+			FocusTimerShop.LOGGER.info("Generated ingredients.json with {} entries", defaultPrices.getPrices().size());
+		}
+		
 		// Chest definitions
 		File chestDefs = LOOTCHESTS_DIR.resolve("chest_definitions.json").toFile();
 		if (!chestDefs.exists()) {
