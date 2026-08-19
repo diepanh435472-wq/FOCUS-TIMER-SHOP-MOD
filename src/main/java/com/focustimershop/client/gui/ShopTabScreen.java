@@ -432,8 +432,8 @@ public class ShopTabScreen {
 			canAfford = ClientDataCache.getSilverCoins() >= silverCost;
 		} else {
 			// Gold mode: check gold + silver separately
-			int playerGold = ClientDataCache.getGoldCoins();
-			int playerSilver = ClientDataCache.getSilverCoins();
+			long playerGold = ClientDataCache.getGoldCoins();
+			long playerSilver = ClientDataCache.getSilverCoins();
 			canAfford = (playerGold >= goldCost) && (playerSilver >= silverCost);
 		}
 		

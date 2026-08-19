@@ -1,5 +1,7 @@
 package com.focustimershop.timer;
 
+import com.focustimershop.FocusTimerShop;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -7,6 +9,10 @@ import java.util.UUID;
 /**
  * Represents an active timer session for a player
  * Server-authoritative to prevent cheating
+ * 
+ * PHASE 2 FIXES:
+ * - Accurate reward calculation with finalTick() improvements (BUG #4)
+ * - Prevention of double-counting elapsed time
  */
 public class TimerSession {
 	private final UUID playerId;
@@ -41,19 +47,24 @@ public class TimerSession {
 	}
 
 	public void pause() {
-		// Force final tick to capture accurate elapsed time
+		// PHASE 2: Force final tick BEFORE changing state to capture accurate elapsed time
 		finalTick();
 		this.state = TimerState.PAUSED;
+		// lastTickTime is already updated by finalTick(), no need to reset here
 	}
 
 	public void resume() {
 		this.state = TimerState.RUNNING;
+		// PHASE 2: Reset lastTickTime to NOW to start fresh timing from resume
+		// This prevents counting the pause duration
 		this.lastTickTime = System.currentTimeMillis();
 	}
 
 	/**
 	 * Update timer - called every server tick
 	 * Returns true if timer completed naturally
+	 * 
+	 * PHASE 2: Added protection against negative time from clock skew
 	 */
 	public boolean tick() {
 		if (state != TimerState.RUNNING) {
@@ -62,6 +73,20 @@ public class TimerSession {
 
 		long currentTime = System.currentTimeMillis();
 		long deltaMs = currentTime - lastTickTime;
+		
+		// PHASE 2: Protect against clock skew (negative delta or huge jump)
+		if (deltaMs < 0) {
+			// System clock went backwards!
+			FocusTimerShop.LOGGER.warn("PHASE2_REWARD: Clock skew detected! deltaMs: {} (resetting lastTickTime)", deltaMs);
+			lastTickTime = currentTime;
+			return false;
+		}
+		
+		// PHASE 2: Protect against huge time jumps (more than 5 seconds = likely clock adjustment)
+		if (deltaMs > 5000) {
+			FocusTimerShop.LOGGER.warn("PHASE2_REWARD: Large time jump detected: {}ms (capping to 5000ms)", deltaMs);
+			deltaMs = 5000; // Cap at 5 seconds
+		}
 		
 		// Update every second
 		if (deltaMs >= 1000) {
@@ -87,11 +112,14 @@ public class TimerSession {
 	}
 	
 	/**
-	 * ===== FIX: FINAL TICK BEFORE STOP =====
+	 * PHASE 2 FIX: FINAL TICK BEFORE PAUSE/STOP
 	 * Force update elapsed time with remaining milliseconds
-	 * Called when timer is stopped to get accurate final time
+	 * Called when timer is paused/stopped to get accurate final time
+	 * 
+	 * CRITICAL: Resets lastTickTime after updating to prevent double-counting
 	 */
 	public void finalTick() {
+		// Only tick if currently RUNNING and has valid lastTickTime
 		if (state != TimerState.RUNNING || lastTickTime == 0) {
 			return;
 		}
@@ -99,13 +127,22 @@ public class TimerSession {
 		long currentTime = System.currentTimeMillis();
 		long deltaMs = currentTime - lastTickTime;
 		
-		// Add any remaining seconds (even if < 1000ms, round up)
-		if (deltaMs >= 500) { // Round up if >= 0.5 seconds
-			int secondsPassed = (int) Math.ceil(deltaMs / 1000.0);
-			elapsedTime += secondsPassed;
+		// Only add time if there's actually a delta (prevent double-count on rapid pause/resume)
+		if (deltaMs > 0) {
+			// Add any remaining seconds (even if < 1000ms, round up if >= 0.5s)
+			if (deltaMs >= 500) {
+				int secondsPassed = (int) Math.ceil(deltaMs / 1000.0);
+				elapsedTime += secondsPassed;
+				
+				FocusTimerShop.LOGGER.debug("PHASE2_REWARD: finalTick() added {}s (deltaMs: {})", 
+					secondsPassed, deltaMs);
+			}
+			
+			// CRITICAL: Reset lastTickTime to prevent double-counting
+			// If we pause/resume quickly, we don't want to count the same time twice
+			lastTickTime = currentTime;
 		}
 	}
-	// ========================================
 
 	public void addLap() {
 		if (type == TimerType.STOPWATCH) {
@@ -135,6 +172,11 @@ public class TimerSession {
 	public TimerState getState() {
 		return state;
 	}
+	
+	// PHASE 2: Setter for state (for persistence restore)
+	public void setState(TimerState state) {
+		this.state = state;
+	}
 
 	public int getTargetTime() {
 		return targetTime;
@@ -146,6 +188,16 @@ public class TimerSession {
 
 	public int getElapsedTime() {
 		return elapsedTime;
+	}
+	
+	// PHASE 2: Setter for elapsed time (for persistence restore)
+	public void setElapsedTime(int elapsedTime) {
+		this.elapsedTime = elapsedTime;
+	}
+	
+	// PHASE 2: Getter for lastTickTime (for persistence)
+	public long getLastTickTime() {
+		return lastTickTime;
 	}
 
 	public int getRemainingTime() {

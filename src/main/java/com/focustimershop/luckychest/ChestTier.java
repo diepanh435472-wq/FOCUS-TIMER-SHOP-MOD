@@ -124,7 +124,7 @@ public enum ChestTier {
 	/**
 	 * Check if player can afford with ANY of the payment options
 	 */
-	public boolean canAffordOpenOne(int playerSilver, int playerGold) {
+	public boolean canAffordOpenOne(long playerSilver, long playerGold) {
 		for (PaymentOption option : openOneOptions) {
 			if (option.canAfford(playerSilver, playerGold)) {
 				return true;
@@ -136,7 +136,7 @@ public enum ChestTier {
 	/**
 	 * Check if player can afford x10+1 with ANY of the payment options
 	 */
-	public boolean canAffordOpenTenPlusOne(int playerSilver, int playerGold) {
+	public boolean canAffordOpenTenPlusOne(long playerSilver, long playerGold) {
 		for (PaymentOption option : openTenPlusOneOptions) {
 			if (option.canAfford(playerSilver, playerGold)) {
 				return true;
@@ -148,7 +148,7 @@ public enum ChestTier {
 	/**
 	 * Get cheapest affordable option for opening one
 	 */
-	public PaymentOption getCheapestOpenOne(int playerSilver, int playerGold) {
+	public PaymentOption getCheapestOpenOne(long playerSilver, long playerGold) {
 		PaymentOption cheapest = null;
 		int cheapestValue = Integer.MAX_VALUE;
 		
@@ -175,6 +175,7 @@ public enum ChestTier {
 
 	/**
 	 * Roll for a rarity based on weighted probabilities
+	 * PHASE 3: Now accepts Random parameter for thread-safety
 	 */
 	public ChestRarity rollRarity(java.util.Random random) {
 		int totalWeight = getTotalWeight();

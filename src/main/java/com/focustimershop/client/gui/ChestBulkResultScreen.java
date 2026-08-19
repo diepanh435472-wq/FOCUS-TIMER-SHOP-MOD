@@ -41,14 +41,10 @@ public class ChestBulkResultScreen extends Screen {
 		int revealedCount = Math.min(rewards.size(), ticksOpen / ITEM_REVEAL_INTERVAL);
 		if (revealedCount >= rewards.size() && !allRevealed) {
 			allRevealed = true;
-			
-			// Give items to player after all revealed
-			if (client != null && client.player != null && !itemsGiven) {
-				for (ItemStack stack : rewards) {
-					client.player.dropItem(stack.copy(), false);
-				}
-				itemsGiven = true;
-			}
+			// PHASE 4: BUG #24 FIX - Remove client-side dropItem()
+			// Server already gives items in LuckyChestManager.openChestBulk()
+			// This screen is DISPLAY ONLY - no item giving logic needed
+			itemsGiven = true; // Mark as given (for animation purposes only)
 		}
 	}
 

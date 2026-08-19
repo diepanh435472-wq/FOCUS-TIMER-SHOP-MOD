@@ -17,8 +17,16 @@ import java.util.UUID;
 /**
  * Server-side rental management
  * Handles tool rentals with real-time expiration
+ * 
+ * SECURITY: All enchant levels validated server-side (VULN-003 fix)
  */
 public class RentalManager {
+	
+	// SECURITY: Rental validation constants (VULN-003 fix)
+	public static final int MAX_ENCHANT_LEVEL = 10; // Reasonable max for custom rentals
+	public static final int MIN_DURATION_MINUTES = 1;
+	public static final int MAX_DURATION_MINUTES = 1440; // 24 hours
+	public static final int MAX_TOOL_TYPES = 3; // PICKAXE, AXE, SHOVEL
 	
 	private static final Map<UUID, RentalData> activeRentals = new HashMap<>();
 	
@@ -222,14 +230,19 @@ public class RentalManager {
 	 * Tick down rental timers for all online players
 	 * Only decrements when player is online and game is NOT frozen (timer not running)
 	 * Called every second (20 ticks) from server
+	 * 
+	 * PHASE 2 FIX: Use isPlayerFrozen() instead of hasActiveTimer()
+	 * - hasActiveTimer() returns true even when PAUSED (player can move)
+	 * - isPlayerFrozen() only returns true when RUNNING (actually frozen)
 	 */
 	public static void tickRentalTimers(net.minecraft.server.MinecraftServer server) {
 		for (net.minecraft.server.network.ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-			// Check if player has active timer running
-			boolean isTimerRunning = com.focustimershop.timer.TimerManager.hasActiveTimer(player.getUuid());
+			// PHASE 2 FIX: Check if player's game is actually frozen
+			// Only freeze when timer is RUNNING, not when PAUSED
+			boolean isFrozen = com.focustimershop.timer.TimerManager.isPlayerFrozen(player.getUuid());
 			
-			// Only tick down rental timers when timer is NOT running
-			if (!isTimerRunning) {
+			// Only tick down rental timers when game is NOT frozen
+			if (!isFrozen) {
 				tickPlayerRentalTools(player);
 				tickPlayerRentalData(player);
 			}
@@ -381,9 +394,11 @@ public class RentalManager {
 	
 	/**
 	 * Check player's inventory for expired rental tools and remove them
+	 * PHASE 4: Made public for logout cleanup (BUG #19 fix)
 	 */
-	private static void checkPlayerInventoryForExpiredTools(net.minecraft.server.network.ServerPlayerEntity player) {
+	public static void checkPlayerInventoryForExpiredTools(net.minecraft.server.network.ServerPlayerEntity player) {
 		boolean foundExpired = false;
+		String expiredRentalType = null; // PHASE 4: Track for client notification (BUG #21 fix)
 		
 		// Check main inventory
 		for (int i = 0; i < player.getInventory().size(); i++) {
@@ -400,6 +415,11 @@ public class RentalManager {
 			
 			int remainingSeconds = nbt.getInt("RemainingSeconds");
 			if (remainingSeconds <= 0) {
+				// PHASE 4: BUG #21 FIX - Store rental type before removal
+				if (!foundExpired) {
+					expiredRentalType = nbt.getString("RentalType");
+				}
+				
 				// Tool has expired - remove it
 				player.getInventory().removeStack(i);
 				foundExpired = true;
@@ -408,6 +428,11 @@ public class RentalManager {
 		
 		if (foundExpired) {
 			player.sendMessage(Text.literal("§c⚠ Công cụ thuê của bạn đã hết hạn!"), false);
+			
+			// PHASE 4: BUG #21 FIX - Notify client to clear cache
+			if (expiredRentalType != null) {
+				com.focustimershop.network.ModNetworking.sendRentalExpired(player, expiredRentalType);
+			}
 		}
 	}
 	
@@ -459,6 +484,7 @@ public class RentalManager {
 	
 	/**
 	 * Handle rental request from client (Phase 3)
+	 * SECURITY: VULN-003 fix - comprehensive validation and safe arithmetic
 	 */
 	public static void handleRentalRequest(net.minecraft.server.network.ServerPlayerEntity player,
 	                                       int toolIndex, boolean useFortuneMode, int fortuneLevel,
@@ -466,8 +492,51 @@ public class RentalManager {
 	                                       int durationMinutes, boolean useSilverPayment) {
 		UUID playerId = player.getUuid();
 		
+		// SECURITY VULN-003: Validate enchant levels
+		if (fortuneLevel < 0 || fortuneLevel > MAX_ENCHANT_LEVEL) {
+			FocusTimerShop.LOGGER.warn("SECURITY: Player {} sent invalid fortune level: {}", 
+				player.getName().getString(), fortuneLevel);
+			player.sendMessage(Text.literal("§cInvalid enchant configuration!"), false);
+			return;
+		}
+		if (efficiencyLevel < 0 || efficiencyLevel > MAX_ENCHANT_LEVEL) {
+			FocusTimerShop.LOGGER.warn("SECURITY: Player {} sent invalid efficiency level: {}", 
+				player.getName().getString(), efficiencyLevel);
+			player.sendMessage(Text.literal("§cInvalid enchant configuration!"), false);
+			return;
+		}
+		if (unbreakingLevel < 0 || unbreakingLevel > MAX_ENCHANT_LEVEL) {
+			FocusTimerShop.LOGGER.warn("SECURITY: Player {} sent invalid unbreaking level: {}", 
+				player.getName().getString(), unbreakingLevel);
+			player.sendMessage(Text.literal("§cInvalid enchant configuration!"), false);
+			return;
+		}
+		if (mendingLevel < 0 || mendingLevel > MAX_ENCHANT_LEVEL) {
+			FocusTimerShop.LOGGER.warn("SECURITY: Player {} sent invalid mending level: {}", 
+				player.getName().getString(), mendingLevel);
+			player.sendMessage(Text.literal("§cInvalid enchant configuration!"), false);
+			return;
+		}
+		
+		// SECURITY VULN-003: Validate duration
+		if (durationMinutes < MIN_DURATION_MINUTES || durationMinutes > MAX_DURATION_MINUTES) {
+			FocusTimerShop.LOGGER.warn("SECURITY: Player {} sent invalid duration: {} (min: {}, max: {})", 
+				player.getName().getString(), durationMinutes, MIN_DURATION_MINUTES, MAX_DURATION_MINUTES);
+			player.sendMessage(Text.literal("§cInvalid rental duration!"), false);
+			return;
+		}
+		
 		// FIX: Allow multiple rentals - only check for same tool type
 		String[] toolTypes = {"PICKAXE", "AXE", "SHOVEL"};
+		
+		// SECURITY VULN-004 (also fixed here): Validate tool index
+		if (toolIndex < 0 || toolIndex >= toolTypes.length) {
+			FocusTimerShop.LOGGER.warn("SECURITY: Player {} sent invalid tool index: {} (max: {})", 
+				player.getName().getString(), toolIndex, toolTypes.length - 1);
+			player.sendMessage(Text.literal("§cInvalid tool type!"), false);
+			return;
+		}
+		
 		String requestedToolType = toolTypes[toolIndex];
 		
 		RentalData rental = activeRentals.get(playerId);
@@ -485,62 +554,88 @@ public class RentalManager {
 			return;
 		}
 		
-		// Calculate cost (same formula as client)
-		int baseCost = 30;
-		int fortuneContribution = useFortuneMode ? (fortuneLevel * fortuneLevel) : 100;
-		int efficiencyContribution = efficiencyLevel * efficiencyLevel;
-		int unbreakingContribution = unbreakingLevel * unbreakingLevel;
-		int mendingContribution = mendingLevel * mendingLevel;
-		int statSum = fortuneContribution + efficiencyContribution + unbreakingContribution + mendingContribution;
-		int perBlockCost = baseCost + statSum;
-		int blocks = (int) Math.ceil(durationMinutes / 30.0);
-		int totalSilver = perBlockCost * blocks;
-		int totalGold = (int) Math.ceil(totalSilver / 100.0);
-		
-		// Check if player can afford
-		com.focustimershop.economy.PlayerEconomyData economy = 
-			com.focustimershop.economy.EconomyManager.getPlayerData(player);
-		
-		boolean canAfford = useSilverPayment ? 
-			(economy.getSilverCoins() >= totalSilver) :
-			(economy.getGoldCoins() >= totalGold);
-		
-		if (!canAfford) {
-			player.sendMessage(Text.literal("§cKhông đủ tiền để thuê!"), false);
-			return;
+		// SECURITY VULN-003: Calculate cost using SAFE ARITHMETIC (long with overflow detection)
+		try {
+			long baseCost = 30;
+			
+			// Calculate contributions using long to prevent overflow
+			long fortuneContribution = useFortuneMode ? 
+				Math.multiplyExact((long)fortuneLevel, (long)fortuneLevel) : 100;
+			long efficiencyContribution = Math.multiplyExact((long)efficiencyLevel, (long)efficiencyLevel);
+			long unbreakingContribution = Math.multiplyExact((long)unbreakingLevel, (long)unbreakingLevel);
+			long mendingContribution = Math.multiplyExact((long)mendingLevel, (long)mendingLevel);
+			
+			// Sum with overflow detection
+			long statSum = Math.addExact(fortuneContribution, efficiencyContribution);
+			statSum = Math.addExact(statSum, unbreakingContribution);
+			statSum = Math.addExact(statSum, mendingContribution);
+			
+			long perBlockCost = Math.addExact(baseCost, statSum);
+			long blocks = (long) Math.ceil(durationMinutes / 30.0);
+			long totalSilverLong = Math.multiplyExact(perBlockCost, blocks);
+			
+			// Validate result fits in int (for compatibility with economy system)
+			if (totalSilverLong > Integer.MAX_VALUE || totalSilverLong < 0) {
+				FocusTimerShop.LOGGER.warn("SECURITY: Player {} rental cost overflow: {} (fortune:{}, eff:{}, unb:{}, mend:{})", 
+					player.getName().getString(), totalSilverLong, fortuneLevel, efficiencyLevel, 
+					unbreakingLevel, mendingLevel);
+				player.sendMessage(Text.literal("§cRental configuration too expensive!"), false);
+				return;
+			}
+			
+			int totalSilver = (int) totalSilverLong;
+			int totalGold = (int) Math.ceil(totalSilver / 100.0);
+			
+				// Check if player can afford
+			com.focustimershop.economy.PlayerEconomyData economy = 
+				com.focustimershop.economy.EconomyManager.getPlayerData(player);
+			
+			boolean canAfford = useSilverPayment ? 
+				(economy.getSilverCoins() >= totalSilver) :
+				(economy.getGoldCoins() >= totalGold);
+			
+			if (!canAfford) {
+				player.sendMessage(Text.literal("§cKhông đủ tiền để thuê!"), false);
+				return;
+			}
+			
+			// Deduct currency
+			if (useSilverPayment) {
+				economy.removeSilverCoins(totalSilver);
+			} else {
+				economy.removeGoldCoins(totalGold);
+			}
+			
+			com.focustimershop.economy.EconomyManager.savePlayerData(player);
+			com.focustimershop.economy.EconomyManager.syncToClient(player);
+			
+			// Add new rental (v1.0.6+ with remainingSeconds instead of endTime)
+			long now = System.currentTimeMillis();
+			rental.addRental(requestedToolType, now, durationMinutes * 60,
+			                 useFortuneMode ? fortuneLevel : 0, efficiencyLevel, 
+			                 unbreakingLevel, mendingLevel, !useFortuneMode);
+			
+			// Save to memory and disk
+			activeRentals.put(playerId, rental);
+			saveRentalData(playerId, rental);
+			
+			// Give tool to player (pass duration instead of endTime)
+			giveCustomRentalTool(player, rental, toolIndex, useFortuneMode, fortuneLevel, 
+			                     efficiencyLevel, unbreakingLevel, mendingLevel, durationMinutes * 60);
+			
+			String costMsg = useSilverPayment ? 
+				(totalSilver + " Silver") :
+				(totalGold + " Gold");
+			player.sendMessage(Text.literal("§aThuê thành công! Chi phí: " + costMsg), false);
+			
+			FocusTimerShop.LOGGER.info("Player {} rented {} for {}min ({})", 
+				player.getName().getString(), requestedToolType, durationMinutes, costMsg);
+				
+		} catch (ArithmeticException e) {
+			FocusTimerShop.LOGGER.warn("SECURITY: Player {} caused arithmetic overflow in rental calculation", 
+				player.getName().getString());
+			player.sendMessage(Text.literal("§cRental calculation error! Configuration too extreme."), false);
 		}
-		
-		// Deduct currency
-		if (useSilverPayment) {
-			economy.removeSilverCoins(totalSilver);
-		} else {
-			economy.removeGoldCoins(totalGold);
-		}
-		
-		com.focustimershop.economy.EconomyManager.savePlayerData(player);
-		com.focustimershop.economy.EconomyManager.syncToClient(player);
-		
-		// Add new rental (v1.0.6+ with remainingSeconds instead of endTime)
-		long now = System.currentTimeMillis();
-		rental.addRental(requestedToolType, now, durationMinutes * 60,
-		                 useFortuneMode ? fortuneLevel : 0, efficiencyLevel, 
-		                 unbreakingLevel, mendingLevel, !useFortuneMode);
-		
-		// Save to memory and disk
-		activeRentals.put(playerId, rental);
-		saveRentalData(playerId, rental);
-		
-		// Give tool to player (pass duration instead of endTime)
-		giveCustomRentalTool(player, rental, toolIndex, useFortuneMode, fortuneLevel, 
-		                     efficiencyLevel, unbreakingLevel, mendingLevel, durationMinutes * 60);
-		
-		String costMsg = useSilverPayment ? 
-			(totalSilver + " Silver") :
-			(totalGold + " Gold");
-		player.sendMessage(Text.literal("§aThuê thành công! Chi phí: " + costMsg), false);
-		
-		FocusTimerShop.LOGGER.info("Player {} rented {} for {}min ({})", 
-			player.getName().getString(), requestedToolType, durationMinutes, costMsg);
 	}
 	
 	/**

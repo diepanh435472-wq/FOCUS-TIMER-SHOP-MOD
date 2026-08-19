@@ -199,11 +199,17 @@ public class TimerTabScreen {
 			// Stop button
 			int stopX = startX + btnWidth + btnSpacing;
 			if (mouseX >= stopX && mouseX <= stopX + btnWidth && mouseY >= btnY && mouseY <= btnY + 35) {
-				// Only mark as abandoned if timer ran for less than 60 seconds
+				// PHASE 4: BUG #23 FIX - Proper abandoned detection
+				// Abandoned if: too short (<60s) OR didn't complete target
 				int elapsedSeconds = ClientDataCache.getElapsedSeconds();
-				boolean abandoned = elapsedSeconds < 60;
+				int targetSeconds = ClientDataCache.getTargetSeconds();
+				TimerType type = ClientDataCache.getCurrentTimerType();
 				
-				System.out.println("[DEBUG-TIMER-STOP] Elapsed: " + elapsedSeconds + "s, abandoned: " + abandoned);
+				boolean tooShort = elapsedSeconds < 60;
+				boolean incompleteTarget = (type != TimerType.STOPWATCH && targetSeconds > 0 && elapsedSeconds < targetSeconds);
+				boolean abandoned = tooShort || incompleteTarget;
+				
+				System.out.println("[DEBUG-TIMER-STOP] Elapsed: " + elapsedSeconds + "s, target: " + targetSeconds + "s, abandoned: " + abandoned);
 				ModNetworking.sendTimerStop(abandoned);
 				return true;
 			}

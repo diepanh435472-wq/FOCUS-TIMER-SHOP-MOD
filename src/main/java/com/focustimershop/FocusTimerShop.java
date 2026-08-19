@@ -20,6 +20,22 @@ public class FocusTimerShop implements ModInitializer {
 		// Initialize FCTMS database
 		com.focustimershop.database.DatabaseManager.initialize();
 		
+		// Initialize rank system (v1.0.6)
+		com.focustimershop.profile.RankManager.initialize();
+		
+		// Initialize profile system (v1.0.6)
+		com.focustimershop.profile.ProfileManager.initialize();
+		
+		// Initialize achievement system (v1.0.6 Phase 5)
+		com.focustimershop.achievement.AchievementManager.initialize();
+		com.focustimershop.achievement.AchievementSystemManager.initialize();
+		
+		// Initialize title system (v1.0.6 Phase 5)
+		com.focustimershop.title.TitleSystemManager.initialize();
+		
+		// Initialize mission system (v1.0.6 Phase 6)
+		com.focustimershop.mission.MissionManager.initialize();
+		
 		// Initialize rental system
 		com.focustimershop.rental.RentalManager.initialize();
 		
@@ -29,10 +45,15 @@ public class FocusTimerShop implements ModInitializer {
 		// Initialize networking
 		ModNetworking.registerServerPackets();
 		
+		// PHASE 2: Initialize timer persistence system
+		TimerManager.initializePersistence();
+		
 		// Register admin commands
 		net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
 			(dispatcher, registryAccess, environment) -> {
 				com.focustimershop.command.AdminCommands.register(dispatcher, registryAccess, environment);
+				com.focustimershop.command.AdminCommands.registerRankTest(dispatcher); // v1.0.6 Phase 0.1
+				com.focustimershop.command.ProfileTestCommand.register(dispatcher, registryAccess, environment);
 			}
 		);
 
@@ -53,11 +74,23 @@ public class FocusTimerShop implements ModInitializer {
 				com.focustimershop.rental.RentalManager.tickRentalTimers(server);
 			}
 		});
+		
+		// PHASE 3: Periodic cleanup for memory leak prevention (BUG #13)
+		// Cleanup every minute (1200 ticks)
+		final int[] cleanupCounter = {0};
+		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			cleanupCounter[0]++;
+			if (cleanupCounter[0] >= 1200) { // Every minute
+				cleanupCounter[0] = 0;
+				com.focustimershop.luckychest.LuckyChestManager.cleanupOldIdempotencyRecords();
+			}
+		});
 
 		// Handle server shutdown - clear all data
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
 			TimerManager.clearAll();
 			com.focustimershop.rental.RentalManager.clearAll();
+			com.focustimershop.profile.ProfileManager.clearAll();
 		});
 
 		// Handle player join
@@ -65,12 +98,21 @@ public class FocusTimerShop implements ModInitializer {
 			EconomyManager.onPlayerJoin(handler.player);
 			// Send shop data to client so they can view items
 			ModNetworking.sendShopData(handler.player);
+			// Load player profile (v1.0.6)
+			com.focustimershop.profile.ProfileManager.onPlayerJoin(handler.player);
+			// PHASE 2: Restore saved timer
+			TimerManager.onPlayerJoin(handler.player);
 		});
 
 		// Handle player disconnect
 		net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			EconomyManager.onPlayerDisconnect(handler.player);
+			// PHASE 2: Save timer before disconnect
 			TimerManager.onPlayerDisconnect(handler.player);
+			com.focustimershop.profile.ProfileManager.onPlayerDisconnect(handler.player);
+			// PHASE 4: Remove expired rental tools on logout (BUG #19 fix)
+			com.focustimershop.rental.RentalManager.checkPlayerInventoryForExpiredTools(handler.player);
+			LOGGER.debug("PHASE4_RENTAL: Checked expired tools for {} on logout", handler.player.getName().getString());
 		});
 		
 		// ===== PER-WORLD ECONOMY: Handle dimension change =====

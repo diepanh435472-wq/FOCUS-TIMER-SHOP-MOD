@@ -1,0 +1,605 @@
+[
+  {
+    "id": "title_001",
+    "name": "Người Chăm Chỉ",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng giờ tập trung: 15 giờ\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_005_focus_hours",
+    "displayPrefix": "Người Chăm Chỉ"
+  },
+  {
+    "id": "title_002",
+    "name": "Bậc Thầy Tập Trung",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng giờ tập trung: 175 giờ\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_014_focus_hours",
+    "displayPrefix": "Bậc Thầy Tập Trung"
+  },
+  {
+    "id": "title_003",
+    "name": "Huyền Thoại Kiên Trì",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng giờ tập trung: 600 giờ\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_022_focus_hours",
+    "displayPrefix": "Huyền Thoại Kiên Trì"
+  },
+  {
+    "id": "title_004",
+    "name": "Người Đều Đặn",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng số phiên hoàn thành: 25 phiên\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_026_sessions",
+    "displayPrefix": "Người Đều Đặn"
+  },
+  {
+    "id": "title_005",
+    "name": "Cỗ Máy Phiên Học",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng số phiên hoàn thành: 300 phiên\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_032_sessions",
+    "displayPrefix": "Cỗ Máy Phiên Học"
+  },
+  {
+    "id": "title_006",
+    "name": "Vô Cực Phiên",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng số phiên hoàn thành: 2000 phiên\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_038_sessions",
+    "displayPrefix": "Vô Cực Phiên"
+  },
+  {
+    "id": "title_007",
+    "name": "Giữ Lửa",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Chuỗi ngày liên tục (Streak): 10 ngày\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_043_streak",
+    "displayPrefix": "Giữ Lửa"
+  },
+  {
+    "id": "title_008",
+    "name": "Không Bao Giờ Bỏ Cuộc",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Chuỗi ngày liên tục (Streak): 150 ngày\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_051_streak",
+    "displayPrefix": "Không Bao Giờ Bỏ Cuộc"
+  },
+  {
+    "id": "title_009",
+    "name": "Streak Bất Tử",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Chuỗi ngày liên tục (Streak): 1000 ngày\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_058_streak",
+    "displayPrefix": "Streak Bất Tử"
+  },
+  {
+    "id": "title_010",
+    "name": "Sức Bền Tốt",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Kỷ lục 1 phiên tập trung: 45 phút\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_061_longest_session",
+    "displayPrefix": "Sức Bền Tốt"
+  },
+  {
+    "id": "title_011",
+    "name": "Marathon Tập Trung",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Kỷ lục 1 phiên tập trung: 240 phút\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_066_longest_session",
+    "displayPrefix": "Marathon Tập Trung"
+  },
+  {
+    "id": "title_012",
+    "name": "Không Giới Hạn",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Kỷ lục 1 phiên tập trung: 720 phút\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_070_longest_session",
+    "displayPrefix": "Không Giới Hạn"
+  },
+  {
+    "id": "title_013",
+    "name": "Khách Quen",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng lượt mua hàng: 25 lượt\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_074_shop_purchases",
+    "displayPrefix": "Khách Quen"
+  },
+  {
+    "id": "title_014",
+    "name": "Thượng Đế Mua Sắm",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng lượt mua hàng: 500 lượt\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_079_shop_purchases",
+    "displayPrefix": "Thượng Đế Mua Sắm"
+  },
+  {
+    "id": "title_015",
+    "name": "Ông Trùm Chi Tiêu",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng lượt mua hàng: 5000 lượt\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_084_shop_purchases",
+    "displayPrefix": "Ông Trùm Chi Tiêu"
+  },
+  {
+    "id": "title_016",
+    "name": "May Mắn Nho Nhỏ",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Lucky Chest đã mở: 10 lần\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_087_chests_opened",
+    "displayPrefix": "May Mắn Nho Nhỏ"
+  },
+  {
+    "id": "title_017",
+    "name": "Thợ Săn Rương",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Lucky Chest đã mở: 150 lần\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_092_chests_opened",
+    "displayPrefix": "Thợ Săn Rương"
+  },
+  {
+    "id": "title_018",
+    "name": "Thần May Mắn",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Lucky Chest đã mở: 1000 lần\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_097_chests_opened",
+    "displayPrefix": "Thần May Mắn"
+  },
+  {
+    "id": "title_019",
+    "name": "Người Tích Luỹ",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Silver kiếm được: 500 Silver\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_099_silver_earned",
+    "displayPrefix": "Người Tích Luỹ"
+  },
+  {
+    "id": "title_020",
+    "name": "Tỷ Phú Silver",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Silver kiếm được: 10000 Silver\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_102_silver_earned",
+    "displayPrefix": "Tỷ Phú Silver"
+  },
+  {
+    "id": "title_021",
+    "name": "Đế Chế Silver",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Silver kiếm được: 500000 Silver\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_105_silver_earned",
+    "displayPrefix": "Đế Chế Silver"
+  },
+  {
+    "id": "title_022",
+    "name": "Nhà Đầu Tư",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Silver quy đổi Gold: 500 Silver\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_107_silver_converted",
+    "displayPrefix": "Nhà Đầu Tư"
+  },
+  {
+    "id": "title_023",
+    "name": "Chuyên Gia Quy Đổi",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Silver quy đổi Gold: 10000 Silver\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_110_silver_converted",
+    "displayPrefix": "Chuyên Gia Quy Đổi"
+  },
+  {
+    "id": "title_024",
+    "name": "Ông Vua Gold",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Silver quy đổi Gold: 500000 Silver\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_113_silver_converted",
+    "displayPrefix": "Ông Vua Gold"
+  },
+  {
+    "id": "title_025",
+    "name": "Người Học Việc",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Focus XP kiếm được (trọn đời): 200 XP\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_115_xp_lifetime",
+    "displayPrefix": "Người Học Việc"
+  },
+  {
+    "id": "title_026",
+    "name": "Cao Thủ XP",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Focus XP kiếm được (trọn đời): 3000 XP\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_118_xp_lifetime",
+    "displayPrefix": "Cao Thủ XP"
+  },
+  {
+    "id": "title_027",
+    "name": "Bậc Thầy Tối Thượng",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng Focus XP kiếm được (trọn đời): 24000 XP\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_121_xp_lifetime",
+    "displayPrefix": "Bậc Thầy Tối Thượng"
+  },
+  {
+    "id": "title_028",
+    "name": "Thợ Đào Nghiệp Dư",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng khối đã đào (Thuê công cụ): 50 khối\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_124_blocks_mined",
+    "displayPrefix": "Thợ Đào Nghiệp Dư"
+  },
+  {
+    "id": "title_029",
+    "name": "Máy Đào Chuyên Nghiệp",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng khối đã đào (Thuê công cụ): 1000 khối\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_128_blocks_mined",
+    "displayPrefix": "Máy Đào Chuyên Nghiệp"
+  },
+  {
+    "id": "title_030",
+    "name": "Huyền Thoại Khai Khoáng",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng khối đã đào (Thuê công cụ): 10000 khối\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_131_blocks_mined",
+    "displayPrefix": "Huyền Thoại Khai Khoáng"
+  },
+  {
+    "id": "title_031",
+    "name": "Người Hoàn Thành",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng nhiệm vụ hoàn thành: 5 nhiệm vụ\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_133_missions",
+    "displayPrefix": "Người Hoàn Thành"
+  },
+  {
+    "id": "title_032",
+    "name": "Chuyên Gia Nhiệm Vụ",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng nhiệm vụ hoàn thành: 25 nhiệm vụ\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_135_missions",
+    "displayPrefix": "Chuyên Gia Nhiệm Vụ"
+  },
+  {
+    "id": "title_033",
+    "name": "Huyền Thoại Nhiệm Vụ",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Tổng nhiệm vụ hoàn thành: 100 nhiệm vụ\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_137_missions",
+    "displayPrefix": "Huyền Thoại Nhiệm Vụ"
+  },
+  {
+    "id": "title_034",
+    "name": "Thành Viên Mới",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Thời gian gắn bó (ngày làm thành viên): 14 ngày\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_139_member_age",
+    "displayPrefix": "Thành Viên Mới"
+  },
+  {
+    "id": "title_035",
+    "name": "Bạn Đồng Hành",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Thời gian gắn bó (ngày làm thành viên): 90 ngày\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_142_member_age",
+    "displayPrefix": "Bạn Đồng Hành"
+  },
+  {
+    "id": "title_036",
+    "name": "Người Gắn Bó",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Thời gian gắn bó (ngày làm thành viên): 730 ngày\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_145_member_age",
+    "displayPrefix": "Người Gắn Bó"
+  },
+  {
+    "id": "title_037",
+    "name": "Ngày Năng Suất",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Kỷ lục XP trong 1 ngày: 100 XP\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_147_best_xp_day",
+    "displayPrefix": "Ngày Năng Suất"
+  },
+  {
+    "id": "title_038",
+    "name": "Bùng Nổ XP",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Kỷ lục XP trong 1 ngày: 500 XP\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_150_best_xp_day",
+    "displayPrefix": "Bùng Nổ XP"
+  },
+  {
+    "id": "title_039",
+    "name": "Kỷ Lục Vô Tiền",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Kỷ lục XP trong 1 ngày: 1000 XP\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_152_best_xp_day",
+    "displayPrefix": "Kỷ Lục Vô Tiền"
+  },
+  {
+    "id": "title_040",
+    "name": "Ngày Chăm",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Kỷ lục số phiên trong 1 ngày: 3 phiên\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_154_best_sessions_day",
+    "displayPrefix": "Ngày Chăm"
+  },
+  {
+    "id": "title_041",
+    "name": "Marathon 1 Ngày",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Kỷ lục số phiên trong 1 ngày: 8 phiên\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_156_best_sessions_day",
+    "displayPrefix": "Marathon 1 Ngày"
+  },
+  {
+    "id": "title_042",
+    "name": "Không Thể Ngăn Cản",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Kỷ lục số phiên trong 1 ngày: 10 phiên\".",
+    "rarity": "Cực hiếm",
+    "rarityCode": "EPIC",
+    "unlockedByAchievementId": "ach_157_best_sessions_day",
+    "displayPrefix": "Không Thể Ngăn Cản"
+  },
+  {
+    "id": "title_043",
+    "name": "Có Kỷ Luật",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Đạt mục tiêu tuần liên tiếp: 1 tuần\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_158_weekly_goal_streak",
+    "displayPrefix": "Có Kỷ Luật"
+  },
+  {
+    "id": "title_044",
+    "name": "Kỷ Luật Thép",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Đạt mục tiêu tuần liên tiếp: 4 tuần\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_159_weekly_goal_streak",
+    "displayPrefix": "Kỷ Luật Thép"
+  },
+  {
+    "id": "title_045",
+    "name": "Bậc Thầy Kỷ Luật",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Đạt mục tiêu tuần liên tiếp: 12 tuần\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_160_weekly_goal_streak",
+    "displayPrefix": "Bậc Thầy Kỷ Luật"
+  },
+  {
+    "id": "title_046",
+    "name": "Huyền Thoại Focus",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Đạt hạng Legend\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_172_rank_tier",
+    "displayPrefix": "Huyền Thoại Focus"
+  },
+  {
+    "id": "title_047",
+    "name": "Chủ Nhân Vận May",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Mở Rương Bedrock lần đầu\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_184_chest_tier",
+    "displayPrefix": "Chủ Nhân Vận May"
+  },
+  {
+    "id": "title_048",
+    "name": "Nhà Thám Hiểm Shop",
+    "description": "Nhận khi mua ít nhất 1 vật phẩm ở TẤT CẢ danh mục Shop.",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": null,
+    "displayPrefix": "Nhà Thám Hiểm Shop"
+  },
+  {
+    "id": "title_049",
+    "name": "Bậc Thầy Thuê Đồ",
+    "description": "Nhận khi đã thuê đủ cả 4 loại công cụ ít nhất 1 lần.",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": null,
+    "displayPrefix": "Bậc Thầy Thuê Đồ"
+  },
+  {
+    "id": "title_050",
+    "name": "Toàn Năng",
+    "description": "Nhận khi đã dùng cả 3 loại Timer ít nhất 50 lần mỗi loại.",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": null,
+    "displayPrefix": "Toàn Năng"
+  },
+  {
+    "id": "title_051",
+    "name": "Phiên Đầu Tiên",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Phiên Đầu Tiên\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_204_special",
+    "displayPrefix": "Phiên Đầu Tiên"
+  },
+  {
+    "id": "title_052",
+    "name": "Đổi Diện Mạo",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Đổi Diện Mạo\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_205_special",
+    "displayPrefix": "Đổi Diện Mạo"
+  },
+  {
+    "id": "title_053",
+    "name": "Khoảnh Khắc Đóng Băng",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Khoảnh Khắc Đóng Băng\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_206_special",
+    "displayPrefix": "Khoảnh Khắc Đóng Băng"
+  },
+  {
+    "id": "title_054",
+    "name": "Gói Ghém Hành Trang",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Gói Ghém Hành Trang\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_207_special",
+    "displayPrefix": "Gói Ghém Hành Trang"
+  },
+  {
+    "id": "title_055",
+    "name": "Không Bỏ Cuộc",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Không Bỏ Cuộc\".",
+    "rarity": "Phổ biến",
+    "rarityCode": "COMMON",
+    "unlockedByAchievementId": "ach_208_special",
+    "displayPrefix": "Không Bỏ Cuộc"
+  },
+  {
+    "id": "title_056",
+    "name": "Kết Bạn Từ Xa",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Kết Bạn Từ Xa\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_209_special",
+    "displayPrefix": "Kết Bạn Từ Xa"
+  },
+  {
+    "id": "title_057",
+    "name": "Cú Đêm",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Cú Đêm\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_210_special",
+    "displayPrefix": "Cú Đêm"
+  },
+  {
+    "id": "title_058",
+    "name": "Chim Sớm",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Chim Sớm\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_211_special",
+    "displayPrefix": "Chim Sớm"
+  },
+  {
+    "id": "title_059",
+    "name": "Song Hành",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Song Hành\".",
+    "rarity": "Không phổ biến",
+    "rarityCode": "UNCOMMON",
+    "unlockedByAchievementId": "ach_212_special",
+    "displayPrefix": "Song Hành"
+  },
+  {
+    "id": "title_060",
+    "name": "Toàn Diện",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Toàn Diện\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_213_special",
+    "displayPrefix": "Toàn Diện"
+  },
+  {
+    "id": "title_061",
+    "name": "Đa Dạng Hoá",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Đa Dạng Hoá\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_214_special",
+    "displayPrefix": "Đa Dạng Hoá"
+  },
+  {
+    "id": "title_062",
+    "name": "Trở Lại Đường Đua",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Trở Lại Đường Đua\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_215_special",
+    "displayPrefix": "Trở Lại Đường Đua"
+  },
+  {
+    "id": "title_063",
+    "name": "Về Đích Sát Nút",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Về Đích Sát Nút\".",
+    "rarity": "Hiếm",
+    "rarityCode": "RARE",
+    "unlockedByAchievementId": "ach_216_special",
+    "displayPrefix": "Về Đích Sát Nút"
+  },
+  {
+    "id": "title_064",
+    "name": "Đủ Bộ Đồ Nghề",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Đủ Bộ Đồ Nghề\".",
+    "rarity": "Cực hiếm",
+    "rarityCode": "EPIC",
+    "unlockedByAchievementId": "ach_217_special",
+    "displayPrefix": "Đủ Bộ Đồ Nghề"
+  },
+  {
+    "id": "title_065",
+    "name": "Chi Đậm",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Chi Đậm\".",
+    "rarity": "Cực hiếm",
+    "rarityCode": "EPIC",
+    "unlockedByAchievementId": "ach_218_special",
+    "displayPrefix": "Chi Đậm"
+  },
+  {
+    "id": "title_066",
+    "name": "Nhà Sưu Tầm Rương",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Nhà Sưu Tầm Rương\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_219_special",
+    "displayPrefix": "Nhà Sưu Tầm Rương"
+  },
+  {
+    "id": "title_067",
+    "name": "Huyền Thoại Tập Trung",
+    "description": "Danh hiệu nhận được khi đạt thành tựu \"Huyền Thoại Tập Trung\".",
+    "rarity": "Huyền thoại",
+    "rarityCode": "LEGENDARY",
+    "unlockedByAchievementId": "ach_220_special",
+    "displayPrefix": "Huyền Thoại Tập Trung"
+  }
+]

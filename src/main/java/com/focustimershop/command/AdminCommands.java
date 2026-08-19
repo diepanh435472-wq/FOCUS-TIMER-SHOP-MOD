@@ -58,13 +58,13 @@ public class AdminCommands {
 		String amountStr = StringArgumentType.getString(context, "amount");
 		ServerPlayerEntity targetPlayer = EntityArgumentType.getPlayer(context, "player");
 		
-		// Parse amount (can be number or "infinity")
+		// Parse amount (can be number or "infinity") - Phase 0: long
 		boolean isInfinity = amountStr.equalsIgnoreCase("infinity");
-		int amount = 0;
+		long amount = 0;
 		
 		if (!isInfinity) {
 			try {
-				amount = Integer.parseInt(amountStr);
+				amount = Long.parseLong(amountStr);
 				if (amount < 0) {
 					source.sendError(Text.literal("§cSố lượng phải là số dương!"));
 					return 0;
@@ -76,19 +76,22 @@ public class AdminCommands {
 		}
 		
 		// Make final for lambda
-		final int finalAmount = amount;
+		final long finalAmount = amount;
 		final String playerName = targetPlayer.getName().getString();
 		
 		// Get player data
 		PlayerEconomyData economy = EconomyManager.getPlayerData(targetPlayer);
 		
+		// Safe large number instead of MAX_VALUE (Phase 0 hotfix)
+		final long SAFE_LARGE_VALUE = 1_000_000_000L; // 1 billion
+		
 		// Apply currency changes
 		switch (currency.toLowerCase()) {
 			case "all":
 				if (isInfinity) {
-					economy.setSilverCoins(Integer.MAX_VALUE);
-					economy.setGoldCoins(Integer.MAX_VALUE);
-					economy.setFocusXp(Integer.MAX_VALUE);
+					economy.setSilverCoins(SAFE_LARGE_VALUE);
+					economy.setGoldCoins(SAFE_LARGE_VALUE);
+					economy.setFocusXp(SAFE_LARGE_VALUE);
 					source.sendFeedback(() -> Text.literal("§aĐã set INFINITY tất cả tiền tệ cho " + playerName), true);
 					targetPlayer.sendMessage(Text.literal("§a§lADMIN đã set infinity tất cả tiền tệ cho bạn!"), false);
 				} else {
@@ -102,7 +105,7 @@ public class AdminCommands {
 				
 			case "silver":
 				if (isInfinity) {
-					economy.setSilverCoins(Integer.MAX_VALUE);
+					economy.setSilverCoins(SAFE_LARGE_VALUE);
 					source.sendFeedback(() -> Text.literal("§aĐã set INFINITY Silver Coins cho " + playerName), true);
 					targetPlayer.sendMessage(Text.literal("§a§lADMIN đã set infinity Silver Coins cho bạn!"), false);
 				} else {
@@ -114,7 +117,7 @@ public class AdminCommands {
 				
 			case "gold":
 				if (isInfinity) {
-					economy.setGoldCoins(Integer.MAX_VALUE);
+					economy.setGoldCoins(SAFE_LARGE_VALUE);
 					source.sendFeedback(() -> Text.literal("§aĐã set INFINITY Gold Coins cho " + playerName), true);
 					targetPlayer.sendMessage(Text.literal("§a§lADMIN đã set infinity Gold Coins cho bạn!"), false);
 				} else {
@@ -126,7 +129,7 @@ public class AdminCommands {
 				
 			case "xp":
 				if (isInfinity) {
-					economy.setFocusXp(Integer.MAX_VALUE);
+					economy.setFocusXp(SAFE_LARGE_VALUE);
 					source.sendFeedback(() -> Text.literal("§aĐã set INFINITY Focus XP cho " + playerName), true);
 					targetPlayer.sendMessage(Text.literal("§a§lADMIN đã set infinity Focus XP cho bạn!"), false);
 				} else {
@@ -146,5 +149,34 @@ public class AdminCommands {
 		EconomyManager.syncToClient(targetPlayer);
 		
 		return 1;
+	}
+	
+	/**
+	 * Register rank test command - v1.0.6 Phase 0.1
+	 */
+	public static void registerRankTest(CommandDispatcher<ServerCommandSource> dispatcher) {
+		dispatcher.register(CommandManager.literal("focus")
+			.requires(source -> source.hasPermissionLevel(2))
+			.then(CommandManager.literal("test")
+				.then(CommandManager.literal("rank")
+					.executes(context -> {
+						context.getSource().sendFeedback(
+							() -> Text.literal("§6Running Rank Manager Tests..."), 
+							false
+						);
+						
+						// Run tests
+						com.focustimershop.profile.RankManagerTest.runAllTests();
+						
+						context.getSource().sendFeedback(
+							() -> Text.literal("§aTests completed! Check server console for results."), 
+							false
+						);
+						
+						return 1;
+					})
+				)
+			)
+		);
 	}
 }

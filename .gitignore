@@ -5,4 +5,7 @@ out/
 *.iml
 run/
 logs/
+FCTMS/
+*.backup
+VERSION_BUMP_1.0.0.md
 

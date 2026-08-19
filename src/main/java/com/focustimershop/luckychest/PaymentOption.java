@@ -33,7 +33,7 @@ public class PaymentOption {
 		return goldCoins;
 	}
 
-	public boolean canAfford(int playerSilver, int playerGold) {
+	public boolean canAfford(long playerSilver, long playerGold) {
 		return playerSilver >= silverCoins && playerGold >= goldCoins;
 	}
 

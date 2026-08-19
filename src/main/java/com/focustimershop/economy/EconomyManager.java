@@ -23,7 +23,8 @@ public class EconomyManager {
 	
 	// Cache for quick access during runtime
 	// Key format: "playerUUID_worldKey"
-	private static final Map<String, PlayerEconomyData> playerDataCache = new HashMap<>();
+	// PHASE 3 FIX (BUG #16): ConcurrentHashMap for thread-safety
+	private static final Map<String, PlayerEconomyData> playerDataCache = new java.util.concurrent.ConcurrentHashMap<>();
 	
 	/**
 	 * Get cache key for player + world combination
@@ -164,6 +165,26 @@ public class EconomyManager {
 
 		savePlayerData(player);
 		syncToClient(player);
+		
+		// Track stats (v1.0.6 - Phase A/Phase 1)
+		com.focustimershop.database.PlayerStatsData stats = 
+			com.focustimershop.database.DatabaseManager.getPlayerStats(player.getUuid());
+		stats.setTotalSilverEarned(stats.getTotalSilverEarned() + silverEarned);
+		stats.setTotalXpEarned(stats.getTotalXpEarned() + xpEarned);
+		
+		// v1.0.6 Phase 1 - Add to daily stats (focus time, session count, XP)
+		stats.addDailyStat(elapsedSeconds, xpEarned);
+		
+		com.focustimershop.database.DatabaseManager.savePlayerStats(stats);
+		
+		// Award XP to profile system (v1.0.6) - handles rank-ups
+		com.focustimershop.profile.ProfileManager.awardFocusXp(player, xpEarned);
+		
+		// v1.0.6 Phase 5 - Check achievements
+		com.focustimershop.achievement.AchievementManager.checkAchievements(player);
+		
+		// v1.0.6 Phase 6 - Check missions
+		com.focustimershop.mission.MissionManager.checkMissions(player);
 
 		FocusTimerShop.LOGGER.info("Player {} earned {} Silver Coins and {} Focus XP from {}s timer",
 			player.getName().getString(), silverEarned, xpEarned, elapsedSeconds);

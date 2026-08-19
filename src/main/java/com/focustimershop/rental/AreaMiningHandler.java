@@ -52,6 +52,20 @@ public class AreaMiningHandler {
 		
 		String rentalType = nbt.getString("RentalType");
 		
+		// PHASE 4: BUG #27 FIX - Validate rental type
+		if (rentalType == null || rentalType.isEmpty()) {
+			FocusTimerShop.LOGGER.warn("PHASE4_RENTAL: Empty rental type in tool NBT for player {}", 
+				player.getName().getString());
+			return;
+		}
+		
+		// PHASE 4: BUG #27 FIX - Whitelist check for known rental types
+		if (!rentalType.equals("PICKAXE") && !rentalType.equals("AXE") && !rentalType.equals("SHOVEL")) {
+			FocusTimerShop.LOGGER.warn("PHASE4_RENTAL: Invalid rental type '{}' in tool NBT for player {}", 
+				rentalType, player.getName().getString());
+			return;
+		}
+		
 		// Handle different tool types
 		ServerWorld serverWorld = (ServerWorld) world;
 		ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;

@@ -80,8 +80,8 @@ public class LuckyChestTabScreen {
 			                  mouseY >= cardY && mouseY <= cardY + cardHeight;
 			
 			// Check if player can afford (any payment option for openOne)
-			int playerSilver = ClientDataCache.getSilverCoins();
-			int playerGold = ClientDataCache.getGoldCoins();
+			long playerSilver = ClientDataCache.getSilverCoins();
+			long playerGold = ClientDataCache.getGoldCoins();
 			boolean canAfford = tier.canAffordOpenOne(playerSilver, playerGold);
 			
 			// Main card background
@@ -231,8 +231,8 @@ public class LuckyChestTabScreen {
 		int btnHeight = 22;
 		int btnSpacing = 5;
 		
-		int playerSilver = ClientDataCache.getSilverCoins();
-		int playerGold = ClientDataCache.getGoldCoins();
+		long playerSilver = ClientDataCache.getSilverCoins();
+		long playerGold = ClientDataCache.getGoldCoins();
 		
 		// Check if can afford x1 (with any payment option)
 		boolean canAffordX1 = tier.canAffordOpenOne(playerSilver, playerGold);
@@ -587,8 +587,8 @@ public class LuckyChestTabScreen {
 		int btnHeight = 22;
 		int btnSpacing = 5;
 		
-		int playerSilver = ClientDataCache.getSilverCoins();
-		int playerGold = ClientDataCache.getGoldCoins();
+		long playerSilver = ClientDataCache.getSilverCoins();
+		long playerGold = ClientDataCache.getGoldCoins();
 		
 		// Check "Mở x1" button
 		if (mouseX >= detailContentX && mouseX <= detailContentX + detailContentWidth &&

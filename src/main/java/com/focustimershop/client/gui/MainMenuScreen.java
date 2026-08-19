@@ -24,6 +24,7 @@ public class MainMenuScreen extends Screen {
 	private ShopTabScreen shopTab;
 	private LuckyChestTabScreen chestTab;
 	private RentalTabScreen rentalTab;
+	private ProfileTabScreen profileTab;  // v1.0.6
 	
 	// Music icon position for click detection
 	private int musicIconX;
@@ -54,6 +55,9 @@ public class MainMenuScreen extends Screen {
 		}
 		if (rentalTab == null) {
 			rentalTab = new RentalTabScreen(this);
+		}
+		if (profileTab == null) {
+			profileTab = new ProfileTabScreen(this);  // v1.0.6
 		}
 
 		// Note: Sidebar buttons are now rendered manually in render() method
@@ -95,9 +99,9 @@ public class MainMenuScreen extends Screen {
 		int tabHeight = 40;
 		int spacing = 5;
 
-		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.LUCKY_CHEST, GuiTab.RENTAL};
-		String[] icons = {"⏱", "🛒", "🎁", "🔧"};
-		String[] labels = {"Timer", "Shop", "Lucky Chest", "Thuê"};
+		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.LUCKY_CHEST, GuiTab.RENTAL, GuiTab.PROFILE};
+		String[] icons = {"⏱", "🛒", "🎁", "🔧", "👤"};
+		String[] labels = {"Timer", "Shop", "Lucky Chest", "Thuê", "Profile"};
 
 		for (int i = 0; i < tabs.length; i++) {
 			GuiTab tab = tabs[i];
@@ -146,9 +150,9 @@ public class MainMenuScreen extends Screen {
 		int musicColor = isMusicPlaying ? 0xFFFFD700 : 0xFF666666;  // Gold when playing, gray when muted/stopped
 		
 		// Get values
-		int silver = ClientDataCache.getSilverCoins();
-		int gold = ClientDataCache.getGoldCoins();
-		int xp = ClientDataCache.getFocusXp();
+		long silver = ClientDataCache.getSilverCoins();
+		long gold = ClientDataCache.getGoldCoins();
+		long xp = ClientDataCache.getFocusXp();
 		
 		// Build strings
 		String silverText = silverIcon + " " + silver;
@@ -249,6 +253,9 @@ public class MainMenuScreen extends Screen {
 			case RENTAL:
 				rentalTab.render(context, contentX, contentY, contentWidth, contentHeight, mouseX, mouseY, delta);
 				break;
+			case PROFILE:  // v1.0.6
+				profileTab.render(context, contentX, contentY, contentWidth, contentHeight, mouseX, mouseY, delta);
+				break;
 		}
 	}
 
@@ -286,7 +293,7 @@ public class MainMenuScreen extends Screen {
 		int tabHeight = 40;
 		int spacing = 5;
 
-		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.LUCKY_CHEST, GuiTab.RENTAL};
+		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.LUCKY_CHEST, GuiTab.RENTAL, GuiTab.PROFILE};
 		for (int i = 0; i < tabs.length; i++) {
 			int btnY = tabY + i * (tabHeight + spacing);
 			if (mouseX >= sidebarX && mouseX <= sidebarX + tabWidth &&
@@ -316,6 +323,9 @@ public class MainMenuScreen extends Screen {
 			case RENTAL:
 				handled = rentalTab.mouseClicked(mouseX, mouseY, button, contentX, contentY, contentWidth, contentHeight);
 				break;
+			case PROFILE:  // v1.0.6
+				handled = profileTab.mouseClicked(mouseX, mouseY, button, contentX, contentY, contentWidth, contentHeight);
+				break;
 		}
 
 		if (handled) {
@@ -331,6 +341,8 @@ public class MainMenuScreen extends Screen {
 			return shopTab.mouseScrolled(mouseX, mouseY, 0, amount);
 		} else if (currentTab == GuiTab.LUCKY_CHEST) {
 			return chestTab.mouseScrolled(mouseX, mouseY, amount);
+		} else if (currentTab == GuiTab.PROFILE) {
+			return profileTab.mouseScrolled(mouseX, mouseY, amount);
 		}
 		return super.mouseScrolled(mouseX, mouseY, amount);
 	}
@@ -377,6 +389,7 @@ public class MainMenuScreen extends Screen {
 		TIMER,
 		SHOP,
 		LUCKY_CHEST,
-		RENTAL
+		RENTAL,
+		PROFILE  // v1.0.6
 	}
 }

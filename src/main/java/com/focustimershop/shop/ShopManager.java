@@ -16,8 +16,16 @@ import java.util.*;
 /**
  * Server-side shop manager
  * Validates purchases and handles item dispensing
+ * 
+ * SECURITY: All limits enforced server-side to prevent DoS attacks
  */
 public class ShopManager {
+	
+	// SECURITY: DoS prevention constants (VULN-002 fix)
+	public static final int MAX_PURCHASE_QUANTITY = 6400; // 100 stacks of 64
+	public static final int MAX_CART_ITEMS = 100; // Maximum unique items in cart
+	public static final int MAX_ITEM_ID_LENGTH = 128; // Reasonable max for "minecraft:item_name" or "enchanted_book:enchant:level"
+	public static final int MAX_TOTAL_ITEMS_PER_TRANSACTION = 10000; // Total items across all cart entries
 	
 	private static final Map<String, ShopItem> shopItems = new HashMap<>();
 	private static final Set<Item> blacklistedItems = new HashSet<>();
@@ -315,13 +323,38 @@ public class ShopManager {
 
 			// Try to add to inventory first, drop remaining
 			if (!player.getInventory().insertStack(stack)) {
-				// Inventory full, drop item near player
-				player.dropItem(stack, false);
+				// Inventory full, drop item at player's body center (not throw randomly)
+				// Spawn at player position (center of body), items will fall down naturally
+				net.minecraft.entity.ItemEntity itemEntity = new net.minecraft.entity.ItemEntity(
+					player.getWorld(),
+					player.getX(), // X position (center of player)
+					player.getY() + 0.5, // Y position (waist level, will fall down)
+					player.getZ(), // Z position (center of player)
+					stack
+				);
+				// No velocity - items just drop straight down
+				itemEntity.setVelocity(0, 0, 0);
+				player.getWorld().spawnEntity(itemEntity);
 			}
 
 			// Save and sync
 			EconomyManager.savePlayerData(player);
 			EconomyManager.syncToClient(player);
+			
+			// Track stats (v1.0.6 - Phase A)
+			com.focustimershop.database.PlayerStatsData stats = 
+				com.focustimershop.database.DatabaseManager.getPlayerStats(player.getUuid());
+			stats.setTotalItemsPurchased(stats.getTotalItemsPurchased() + 1);
+			
+			// Phase B - Activity log
+			int cost = useGold ? shopItem.getGoldCost() : shopItem.getSilverPrice();
+			String currency = useGold ? "Gold" : "Silver";
+			stats.addActivity(
+				com.focustimershop.database.ActivityEntry.Type.SHOP_PURCHASE,
+				String.format("🛒 Mua %s        -%d %s", shopItem.getDisplayName(), cost, currency)
+			);
+			
+			com.focustimershop.database.DatabaseManager.savePlayerStats(stats);
 
 			player.sendMessage(Text.literal("§aPurchased " + shopItem.getDisplayName() + "!"), false);
 			FocusTimerShop.LOGGER.info("Player {} purchased {} for {} {}",
@@ -334,26 +367,57 @@ public class ShopManager {
 	/**
 	 * Handle checkout request from cart (v1.0.2+)
 	 * Validates all items and processes batch purchase atomically
+	 * SECURITY: VULN-002 fix - comprehensive validation to prevent DoS
 	 */
 	public static void handleCheckout(ServerPlayerEntity player, Map<String, Integer> cartItems, boolean useSilver) {
 		ensureInitialized();
-		if (cartItems.isEmpty()) {
+		
+		// SECURITY VALIDATION: Check cart size
+		if (cartItems == null || cartItems.isEmpty()) {
 			player.sendMessage(Text.literal("§cCart is empty!"), false);
+			return;
+		}
+		
+		if (cartItems.size() > MAX_CART_ITEMS) {
+			FocusTimerShop.LOGGER.warn("SECURITY: Player {} attempted cart with {} items (max: {})", 
+				player.getName().getString(), cartItems.size(), MAX_CART_ITEMS);
+			player.sendMessage(Text.literal("§cCart too large! Maximum " + MAX_CART_ITEMS + " unique items."), false);
 			return;
 		}
 
 		PlayerEconomyData economy = EconomyManager.getPlayerData(player);
 		
-		// Calculate total cost
-		int totalCostSilver = 0;
+		// Calculate total cost and validate all items
+		long totalCostSilver = 0; // Use long to detect overflow
+		int totalQuantity = 0;
 		List<ItemStack> itemsToGive = new ArrayList<>();
 		
 		for (Map.Entry<String, Integer> entry : cartItems.entrySet()) {
 			String itemId = entry.getKey();
 			int quantity = entry.getValue();
 			
-			if (quantity <= 0) {
-				player.sendMessage(Text.literal("§cInvalid quantity for " + itemId), false);
+			// SECURITY: Validate item ID length
+			if (itemId == null || itemId.length() > MAX_ITEM_ID_LENGTH) {
+				FocusTimerShop.LOGGER.warn("SECURITY: Player {} sent invalid item ID length: {}", 
+					player.getName().getString(), itemId != null ? itemId.length() : "null");
+				player.sendMessage(Text.literal("§cInvalid item ID!"), false);
+				return;
+			}
+			
+			// SECURITY: Validate quantity bounds
+			if (quantity <= 0 || quantity > MAX_PURCHASE_QUANTITY) {
+				FocusTimerShop.LOGGER.warn("SECURITY: Player {} sent invalid quantity {} for {} (max: {})", 
+					player.getName().getString(), quantity, itemId, MAX_PURCHASE_QUANTITY);
+				player.sendMessage(Text.literal("§cInvalid quantity for " + itemId + "! Maximum " + MAX_PURCHASE_QUANTITY + " per item."), false);
+				return;
+			}
+			
+			// SECURITY: Track total quantity to prevent overflow attacks
+			totalQuantity += quantity;
+			if (totalQuantity > MAX_TOTAL_ITEMS_PER_TRANSACTION) {
+				FocusTimerShop.LOGGER.warn("SECURITY: Player {} exceeded total item limit: {} (max: {})", 
+					player.getName().getString(), totalQuantity, MAX_TOTAL_ITEMS_PER_TRANSACTION);
+				player.sendMessage(Text.literal("§cTotal quantity too large! Maximum " + MAX_TOTAL_ITEMS_PER_TRANSACTION + " items per transaction."), false);
 				return;
 			}
 			
@@ -363,9 +427,17 @@ public class ShopManager {
 				return;
 			}
 			
-			// Calculate cost (always in silver base)
-			int itemCost = shopItem.getSilverPrice();
-			totalCostSilver += itemCost * quantity;
+			// Calculate cost (use long to detect overflow)
+			long itemCost = (long) shopItem.getSilverPrice() * quantity;
+			totalCostSilver += itemCost;
+			
+			// SECURITY: Check for cost overflow
+			if (totalCostSilver < 0 || totalCostSilver > Integer.MAX_VALUE) {
+				FocusTimerShop.LOGGER.warn("SECURITY: Player {} caused cost overflow: {} (item: {}, qty: {})", 
+					player.getName().getString(), totalCostSilver, itemId, quantity);
+				player.sendMessage(Text.literal("§cTransaction cost too large!"), false);
+				return;
+			}
 			
 			// Prepare item stacks
 			if (itemId.startsWith("enchanted_book:")) {
@@ -394,13 +466,21 @@ public class ShopManager {
 		}
 		
 		// Mixed payment: convert silver cost to gold + silver
+		// SECURITY: totalCostSilver is long, validate it fits in int before casting
+		if (totalCostSilver > Integer.MAX_VALUE) {
+			FocusTimerShop.LOGGER.warn("SECURITY: Player {} total cost exceeds int max: {}", 
+				player.getName().getString(), totalCostSilver);
+			player.sendMessage(Text.literal("§cTransaction cost too large!"), false);
+			return;
+		}
+		
 		int goldCost = 0;
-		int silverCost = totalCostSilver;
+		int silverCost = (int) totalCostSilver;
 		
 		if (!useSilver) {
 			// Gold mode: auto-convert (100 silver = 1 gold)
-			goldCost = totalCostSilver / 100;
-			silverCost = totalCostSilver % 100;
+			goldCost = (int) (totalCostSilver / 100);
+			silverCost = (int) (totalCostSilver % 100);
 		}
 		
 		// Check if can afford (mixed payment)
@@ -420,15 +500,43 @@ public class ShopManager {
 			return;
 		}
 		
-		// Deduct currency (mixed)
-		boolean success;
+		// ATOMIC TRANSACTION: Deduct currency with rollback on failure
+		// SECURITY FIX VULN-001: Proper mixed payment with rollback
+		boolean success = false;
+		boolean goldDeducted = false;
+		boolean silverDeducted = false;
+		
 		if (useSilver) {
+			// Silver-only mode
 			success = economy.removeSilverCoins(silverCost);
+			silverDeducted = success;
 		} else {
-			// Gold mode: deduct both currencies
-			boolean goldSuccess = goldCost == 0 || economy.removeGoldCoins(goldCost);
-			boolean silverSuccess = silverCost == 0 || economy.removeSilverCoins(silverCost);
-			success = goldSuccess && silverSuccess;
+			// Gold mode: MUST deduct both gold AND silver remainder atomically
+			// Step 1: Try to deduct gold
+			if (goldCost > 0) {
+				goldDeducted = economy.removeGoldCoins(goldCost);
+				if (!goldDeducted) {
+					player.sendMessage(Text.literal("§cNot enough Gold!"), false);
+					return;
+				}
+			}
+			
+			// Step 2: Try to deduct silver remainder
+			if (silverCost > 0) {
+				silverDeducted = economy.removeSilverCoins(silverCost);
+				if (!silverDeducted) {
+					// ROLLBACK: Refund the gold we just deducted
+					if (goldDeducted) {
+						economy.addGoldCoins(goldCost);
+						FocusTimerShop.LOGGER.warn("Shop transaction rolled back for {} - insufficient silver after gold deduction", 
+							player.getName().getString());
+					}
+					player.sendMessage(Text.literal("§cNot enough Silver!"), false);
+					return;
+				}
+			}
+			
+			success = true; // Both succeeded (or were 0)
 		}
 		
 		if (!success) {
@@ -439,14 +547,41 @@ public class ShopManager {
 		// Give all items (try inventory first, drop if full)
 		for (ItemStack stack : itemsToGive) {
 			if (!player.getInventory().insertStack(stack)) {
-				// Inventory full, drop near player
-				player.dropItem(stack, false);
+				// Inventory full, drop item at player's body center (not throw randomly)
+				// Spawn at player position (center of body), items will fall down naturally
+				net.minecraft.entity.ItemEntity itemEntity = new net.minecraft.entity.ItemEntity(
+					player.getWorld(),
+					player.getX(), // X position (center of player)
+					player.getY() + 0.5, // Y position (waist level, will fall down)
+					player.getZ(), // Z position (center of player)
+					stack
+				);
+				// No velocity - items just drop straight down
+				itemEntity.setVelocity(0, 0, 0);
+				player.getWorld().spawnEntity(itemEntity);
 			}
 		}
 		
 		// Save and sync
 		EconomyManager.savePlayerData(player);
 		EconomyManager.syncToClient(player);
+		
+		// Track stats (v1.0.6 - Phase A) - use existing totalQuantity from validation
+		com.focustimershop.database.PlayerStatsData stats = 
+			com.focustimershop.database.DatabaseManager.getPlayerStats(player.getUuid());
+		stats.setTotalItemsPurchased(stats.getTotalItemsPurchased() + totalQuantity);
+		
+		// Phase B - Activity log
+		String activityCostMsg = useSilver ? 
+			silverCost + " Silver" :
+			(goldCost > 0 && silverCost > 0 ? goldCost + " Gold + " + silverCost + " Silver" :
+			 goldCost > 0 ? goldCost + " Gold" : silverCost + " Silver");
+		stats.addActivity(
+			com.focustimershop.database.ActivityEntry.Type.SHOP_PURCHASE,
+			String.format("🛒 Mua %d items        -%s", cartItems.size(), activityCostMsg)
+		);
+		
+		com.focustimershop.database.DatabaseManager.savePlayerStats(stats);
 		
 		// Success message (mixed payment display)
 		String costMsg = useSilver ? 

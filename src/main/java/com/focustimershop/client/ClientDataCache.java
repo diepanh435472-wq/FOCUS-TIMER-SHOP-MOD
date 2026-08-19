@@ -12,10 +12,10 @@ import java.util.*;
  */
 public class ClientDataCache {
 	
-	// Economy data
-	private static int silverCoins = 0;
-	private static int goldCoins = 0;
-	private static int focusXp = 0;
+	// Economy data (Phase 0 - changed to long)
+	private static long silverCoins = 0;
+	private static long goldCoins = 0;
+	private static long focusXp = 0;
 
 	// Timer state
 	private static boolean hasActiveTimer = false;
@@ -32,21 +32,28 @@ public class ClientDataCache {
 	// Shop data (synced from server)
 	private static final Map<String, ShopItem> shopItems = new HashMap<>();
 	private static boolean shopDataLoaded = false;
+	
+	// Stats data (v1.0.6 Phase 5 - for detailed stats tab)
+	private static long totalSilverEarned = 0;
+	private static long totalSilverConvertedToGold = 0;
+	private static long totalItemsPurchased = 0;
+	private static long totalChestsOpened = 0;
+	private static long totalBlocksMined = 0;
 
-	// Economy getters
-	public static int getSilverCoins() {
+	// Economy getters (Phase 0 - long)
+	public static long getSilverCoins() {
 		return silverCoins;
 	}
 
-	public static int getGoldCoins() {
+	public static long getGoldCoins() {
 		return goldCoins;
 	}
 
-	public static int getFocusXp() {
+	public static long getFocusXp() {
 		return focusXp;
 	}
 
-	public static void updateEconomy(int silver, int gold, int xp) {
+	public static void updateEconomy(long silver, long gold, long xp) {
 		silverCoins = silver;
 		goldCoins = gold;
 		focusXp = xp;
@@ -171,4 +178,17 @@ public class ClientDataCache {
 		shopItems.clear();
 		shopDataLoaded = false;
 	}
+	
+	// Stats data getters/setters (v1.0.6 Phase 5)
+	public static long getTotalSilverEarned() { return totalSilverEarned; }
+	public static long getTotalSilverConvertedToGold() { return totalSilverConvertedToGold; }
+	public static long getTotalItemsPurchased() { return totalItemsPurchased; }
+	public static long getTotalChestsOpened() { return totalChestsOpened; }
+	public static long getTotalBlocksMined() { return totalBlocksMined; }
+	
+	public static void setTotalSilverEarned(long value) { totalSilverEarned = value; }
+	public static void setTotalSilverConvertedToGold(long value) { totalSilverConvertedToGold = value; }
+	public static void setTotalItemsPurchased(long value) { totalItemsPurchased = value; }
+	public static void setTotalChestsOpened(long value) { totalChestsOpened = value; }
+	public static void setTotalBlocksMined(long value) { totalBlocksMined = value; }
 }

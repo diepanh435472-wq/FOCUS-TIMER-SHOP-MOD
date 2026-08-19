@@ -134,7 +134,8 @@ public class RentalData {
 	}
 	
 	// NEW: Get all active rentals
-	public List<SingleRental> getActiveRentals() {
+	// PHASE 4: BUG #28 FIX - Synchronized to prevent ConcurrentModificationException
+	public synchronized List<SingleRental> getActiveRentals() {
 		List<SingleRental> active = new ArrayList<>();
 		for (SingleRental rental : rentals) {
 			if (rental.isActive()) {
@@ -150,7 +151,8 @@ public class RentalData {
 	}
 	
 	// NEW: Remove expired rentals
-	public void cleanupExpired() {
+	// PHASE 4: BUG #28 FIX - Synchronized to prevent ConcurrentModificationException
+	public synchronized void cleanupExpired() {
 		rentals.removeIf(r -> !r.isActive());
 	}
 	

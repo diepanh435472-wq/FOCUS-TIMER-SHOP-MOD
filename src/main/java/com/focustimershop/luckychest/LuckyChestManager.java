@@ -20,12 +20,17 @@ import java.util.*;
  */
 public class LuckyChestManager {
 	
-	private static final Random random = new Random();
+	// PHASE 3: Thread-safe Random (BUG #12)
+	// Use ThreadLocalRandom.current() instead of shared instance
 	private static final Map<ChestRarity, List<LootReward>> lootPools = new HashMap<>();
 	
-	// Idempotency tracking for bulk opens (prevent double-processing)
-	private static final Map<UUID, Long> lastBulkRequestId = new HashMap<>();
+	// PHASE 3: Separate idempotency from cooldown (BUG #7, #8, #13)
+	// Idempotency: Track requestId to prevent duplicate processing
+	private static final Map<UUID, Long> lastBulkRequestId = new java.util.concurrent.ConcurrentHashMap<>();
+	// Cooldown: Track timestamp to rate-limit requests
+	private static final Map<UUID, Long> lastBulkTimestamp = new java.util.concurrent.ConcurrentHashMap<>();
 	private static final long REQUEST_COOLDOWN_MS = 2000; // 2 second cooldown between bulk requests
+	private static final long IDEMPOTENCY_CLEANUP_AGE_MS = 5 * 60 * 1000; // 5 minutes
 	
 	private static volatile boolean initialized = false;
 
@@ -106,6 +111,7 @@ public class LuckyChestManager {
 
 	/**
 	 * Handle chest opening request
+	 * PHASE 3: Fixed payment options (BUG #10)
 	 */
 	public static void openChest(ServerPlayerEntity player, String chestTypeName) {
 		ensureInitialized();
@@ -119,30 +125,48 @@ public class LuckyChestManager {
 
 		PlayerEconomyData economy = EconomyManager.getPlayerData(player);
 
-		// Validate payment
-		boolean success = false;
-		if (tier.usesSilver()) {
-			if (economy.removeSilverCoins(tier.getCost())) {
-				success = true;
-			} else {
-				player.sendMessage(Text.literal("§cNot enough Silver Coins!"), false);
-				return;
-			}
-		} else {
-			if (economy.removeGoldCoins(tier.getCost())) {
-				success = true;
-			} else {
-				player.sendMessage(Text.literal("§cNot enough Gold Coins!"), false);
-				return;
-			}
-		}
-
-		if (!success) {
+		// PHASE 3 FIX (BUG #10): Use payment options instead of deprecated methods
+		// Find cheapest affordable option
+		PaymentOption chosenOption = tier.getCheapestOpenOne(
+			economy.getSilverCoins(), 
+			economy.getGoldCoins()
+		);
+		
+		if (chosenOption == null) {
+			player.sendMessage(Text.literal("§cKhông đủ tiền để mở rương!"), false);
 			return;
 		}
+		
+		// PHASE 3 FIX (BUG #9 pattern): Atomic payment with rollback
+		boolean silverDeducted = false;
+		boolean goldDeducted = false;
+		
+		// Step 1: Deduct silver (if needed)
+		if (chosenOption.getSilverCoins() > 0) {
+			silverDeducted = economy.removeSilverCoins(chosenOption.getSilverCoins());
+			if (!silverDeducted) {
+				player.sendMessage(Text.literal("§cKhông đủ Silver Coins!"), false);
+				return;
+			}
+		}
+		
+		// Step 2: Deduct gold (if needed, with rollback)
+		if (chosenOption.getGoldCoins() > 0) {
+			goldDeducted = economy.removeGoldCoins(chosenOption.getGoldCoins());
+			if (!goldDeducted) {
+				// ROLLBACK: Refund silver
+				if (silverDeducted) {
+					economy.addSilverCoins(chosenOption.getSilverCoins());
+					FocusTimerShop.LOGGER.warn("PHASE3_CHEST: Rolled back silver for {} - insufficient gold", 
+						player.getName().getString());
+				}
+				player.sendMessage(Text.literal("§cKhông đủ Gold Coins!"), false);
+				return;
+			}
+		}
 
-		// Roll for rarity
-		ChestRarity rarity = tier.rollRarity(random);
+		// Roll for rarity (PHASE 3: ThreadLocalRandom for thread-safety)
+		ChestRarity rarity = tier.rollRarity(java.util.concurrent.ThreadLocalRandom.current());
 
 		// Select reward from pool
 		List<LootReward> pool = lootPools.get(rarity);
@@ -151,23 +175,37 @@ public class LuckyChestManager {
 			return;
 		}
 
-		LootReward reward = pool.get(random.nextInt(pool.size()));
-		ItemStack stack = reward.generateStack(random);
+		LootReward reward = pool.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(pool.size()));
+		ItemStack stack = reward.generateStack(java.util.concurrent.ThreadLocalRandom.current());
 
-		// Give reward (drop near player)
-		player.dropItem(stack, false);
+		// PHASE 3 FIX (BUG #11): Try to give to inventory first, spawn only if full
+		boolean addedToInventory = tryGiveItemToPlayer(player, stack);
 
 		// Save and sync economy
 		EconomyManager.savePlayerData(player);
 		EconomyManager.syncToClient(player);
+		
+		// Track stats (v1.0.6 - Phase A)
+		com.focustimershop.database.PlayerStatsData stats = 
+			com.focustimershop.database.DatabaseManager.getPlayerStats(player.getUuid());
+		stats.setTotalChestsOpened(stats.getTotalChestsOpened() + 1);
+		
+		// Phase B - Activity log
+		stats.addActivity(
+			com.focustimershop.database.ActivityEntry.Type.CHEST_OPEN,
+			String.format("🎁 Mở %s (%s)", tier.getDisplayName(), rarity.getDisplayName())
+		);
+		
+		com.focustimershop.database.DatabaseManager.savePlayerStats(stats);
 
 		// Play sound and send message
 		player.playSound(SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.PLAYERS, 1.0f, 1.0f);
 		player.sendMessage(Text.literal("§6Opened " + tier.getDisplayName() + "!"), false);
 		player.sendMessage(Text.literal(rarity.getDisplayName() + " §r- " + stack.getName().getString() + " x" + stack.getCount()), false);
 
-		FocusTimerShop.LOGGER.info("Player {} opened {} and received {} (rarity: {})",
-			player.getName().getString(), tier.name(), stack.getName().getString(), rarity.name());
+		FocusTimerShop.LOGGER.info("PHASE3_CHEST: Player {} opened {} and received {} (rarity: {}, inventory: {})",
+			player.getName().getString(), tier.name(), stack.getName().getString(), rarity.name(), 
+			addedToInventory ? "direct" : "spawned");
 	}
 
 	/**
@@ -181,23 +219,36 @@ public class LuckyChestManager {
 	/**
 	 * Handle bulk chest opening (x10+1 package)
 	 * Server-side only - rolls 11 times independently, charges once
+	 * 
+	 * PHASE 3 FIXES:
+	 * - BUG #7: Separate idempotency from cooldown
+	 * - BUG #8: Record idempotency BEFORE payment
+	 * - BUG #9: Atomic payment with rollback
+	 * - BUG #12: ThreadLocalRandom for thread-safe RNG
+	 * - BUG #11: Inventory space validation
 	 */
 	public static void openChestBulk(ServerPlayerEntity player, String chestTypeName, long requestId) {
 		ensureInitialized();
 		UUID playerId = player.getUuid();
 		
-		// Idempotency check - prevent duplicate processing
+		// PHASE 3 FIX (BUG #7): Separate idempotency check from cooldown check
+		// Idempotency: Check if THIS requestId was already processed
 		Long lastRequestId = lastBulkRequestId.get(playerId);
-		if (lastRequestId != null && lastRequestId == requestId) {
-			FocusTimerShop.LOGGER.warn("Player {} attempted duplicate bulk request {}", player.getName().getString(), requestId);
-			return;
+		if (lastRequestId != null && lastRequestId.equals(requestId)) {
+			FocusTimerShop.LOGGER.warn("PHASE3_CHEST: Player {} attempted duplicate bulk request {}", 
+				player.getName().getString(), requestId);
+			return; // Duplicate request - ignore
 		}
 		
-		// Cooldown check - prevent spam
-		if (lastRequestId != null) {
-			long timeSinceLastRequest = System.currentTimeMillis() - lastRequestId;
+		// Cooldown: Check if player is spamming (separate from idempotency)
+		Long lastTimestamp = lastBulkTimestamp.get(playerId);
+		if (lastTimestamp != null) {
+			long timeSinceLastRequest = System.currentTimeMillis() - lastTimestamp;
 			if (timeSinceLastRequest < REQUEST_COOLDOWN_MS) {
-				player.sendMessage(Text.literal("§cPlease wait before opening another bulk chest!"), false);
+				long waitMs = REQUEST_COOLDOWN_MS - timeSinceLastRequest;
+				player.sendMessage(Text.literal(String.format(
+					"§cVui lòng chờ %.1f giây trước khi mở bulk tiếp!", 
+					waitMs / 1000.0)), false);
 				return;
 			}
 		}
@@ -212,8 +263,8 @@ public class LuckyChestManager {
 		}
 
 		PlayerEconomyData economy = EconomyManager.getPlayerData(player);
-		int playerSilver = economy.getSilverCoins();
-		int playerGold = economy.getGoldCoins();
+		long playerSilver = economy.getSilverCoins();
+		long playerGold = economy.getGoldCoins();
 		
 		// Check if player can afford x10+1 package
 		PaymentOption chosenOption = null;
@@ -225,41 +276,65 @@ public class LuckyChestManager {
 		}
 		
 		if (chosenOption == null) {
-			player.sendMessage(Text.literal("§cNot enough currency for bulk opening!"), false);
+			player.sendMessage(Text.literal("§cKhông đủ tiền để mở bulk!"), false);
 			return;
 		}
 		
-		// Deduct payment ONCE
-		boolean paymentSuccess = true;
-		if (chosenOption.getSilverCoins() > 0) {
-			paymentSuccess = paymentSuccess && economy.removeSilverCoins(chosenOption.getSilverCoins());
-		}
-		if (chosenOption.getGoldCoins() > 0) {
-			paymentSuccess = paymentSuccess && economy.removeGoldCoins(chosenOption.getGoldCoins());
-		}
-		
-		if (!paymentSuccess) {
-			player.sendMessage(Text.literal("§cPayment failed!"), false);
-			return;
-		}
-		
-		// Record this request to prevent duplicates
+		// PHASE 3 FIX (BUG #8): Record idempotency BEFORE payment (prevent race condition)
 		lastBulkRequestId.put(playerId, requestId);
+		lastBulkTimestamp.put(playerId, System.currentTimeMillis());
+		
+		// PHASE 3 FIX (BUG #9): Atomic payment with rollback
+		boolean silverDeducted = false;
+		boolean goldDeducted = false;
+		
+		// Step 1: Deduct silver (if needed)
+		if (chosenOption.getSilverCoins() > 0) {
+			silverDeducted = economy.removeSilverCoins(chosenOption.getSilverCoins());
+			if (!silverDeducted) {
+				player.sendMessage(Text.literal("§cKhông đủ Silver Coins!"), false);
+				// Remove idempotency record (payment failed, allow retry)
+				lastBulkRequestId.remove(playerId);
+				return;
+			}
+		}
+		
+		// Step 2: Deduct gold (if needed, with rollback)
+		if (chosenOption.getGoldCoins() > 0) {
+			goldDeducted = economy.removeGoldCoins(chosenOption.getGoldCoins());
+			if (!goldDeducted) {
+				// ROLLBACK: Refund silver
+				if (silverDeducted) {
+					economy.addSilverCoins(chosenOption.getSilverCoins());
+					FocusTimerShop.LOGGER.warn("PHASE3_CHEST: Rolled back {} silver for {} - insufficient gold", 
+						chosenOption.getSilverCoins(), player.getName().getString());
+				}
+				player.sendMessage(Text.literal("§cKhông đủ Gold Coins!"), false);
+				// Remove idempotency record (payment failed, allow retry)
+				lastBulkRequestId.remove(playerId);
+				return;
+			}
+		}
+		
+		// Payment successful - proceed with rewards
 		
 		// Roll 11 times (10 paid + 1 free)
+		// PHASE 3 FIX (BUG #12): Use ThreadLocalRandom for thread-safe RNG
 		List<ItemStack> rewards = new ArrayList<>();
 		Map<ChestRarity, Integer> rarityCounts = new HashMap<>();
 		
+		java.util.concurrent.ThreadLocalRandom rng = java.util.concurrent.ThreadLocalRandom.current();
+		
 		for (int i = 0; i < 11; i++) {
 			// Roll for rarity
-			ChestRarity rarity = tier.rollRarity(random);
+			ChestRarity rarity = tier.rollRarity(rng);
 			rarityCounts.put(rarity, rarityCounts.getOrDefault(rarity, 0) + 1);
 			
 			// Select reward from pool
 			List<LootReward> pool = lootPools.get(rarity);
 			if (pool != null && !pool.isEmpty()) {
-				LootReward reward = pool.get(random.nextInt(pool.size()));
-				ItemStack stack = reward.generateStack(random);
+				LootReward reward = pool.get(rng.nextInt(pool.size()));
+				ItemStack stack = reward.generateStack(rng);
 				rewards.add(stack);
 			}
 		}
@@ -267,10 +342,16 @@ public class LuckyChestManager {
 		// Send bulk result to client for grid display
 		ModNetworking.sendChestBulkResult(player, tier.getDisplayName(), rewards);
 		
-		// FIX: Actually give items to player!
+		// PHASE 3 FIX (BUG #11): Try to give items to inventory first, spawn only if full
+		int addedToInventory = 0;
+		int spawned = 0;
 		for (ItemStack stack : rewards) {
 			if (stack != null && !stack.isEmpty()) {
-				player.dropItem(stack, false); // Drop near player
+				if (tryGiveItemToPlayer(player, stack)) {
+					addedToInventory++;
+				} else {
+					spawned++;
+				}
 			}
 		}
 		
@@ -278,11 +359,24 @@ public class LuckyChestManager {
 		EconomyManager.savePlayerData(player);
 		EconomyManager.syncToClient(player);
 		
+		// Track stats (v1.0.6 - Phase A) - count 11 chests
+		com.focustimershop.database.PlayerStatsData stats = 
+			com.focustimershop.database.DatabaseManager.getPlayerStats(player.getUuid());
+		stats.setTotalChestsOpened(stats.getTotalChestsOpened() + 11);
+		
+		// Phase B - Activity log
+		stats.addActivity(
+			com.focustimershop.database.ActivityEntry.Type.CHEST_OPEN,
+			String.format("🎁 Mở %s x11", tier.getDisplayName())
+		);
+		
+		com.focustimershop.database.DatabaseManager.savePlayerStats(stats);
+		
 		// Play sound (client will also play on screen open)
 		player.playSound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.PLAYERS, 1.0f, 1.0f);
 		
-		FocusTimerShop.LOGGER.info("Player {} opened {} x11 (requestId: {}), received {} items",
-			player.getName().getString(), tier.name(), requestId, rewards.size());
+		FocusTimerShop.LOGGER.info("PHASE3_CHEST: Player {} opened {} x11 (requestId: {}), received {} items (inventory: {}, spawned: {})",
+			player.getName().getString(), tier.name(), requestId, rewards.size(), addedToInventory, spawned);
 	}
 
 	/**
@@ -309,5 +403,75 @@ public class LuckyChestManager {
 		ensureInitialized();
 		List<LootReward> pool = lootPools.get(rarity);
 		return pool != null ? new ArrayList<>(pool) : new ArrayList<>();
+	}
+	
+	/**
+	 * PHASE 3 FIX (BUG #11): Helper to give item to player with inventory space check
+	 * Tries to add to inventory first, spawns entity only if inventory is full
+	 * 
+	 * @return true if added to inventory, false if spawned as entity
+	 */
+	private static boolean tryGiveItemToPlayer(ServerPlayerEntity player, ItemStack stack) {
+		if (stack == null || stack.isEmpty()) {
+			return false;
+		}
+		
+		// Try to add to player's inventory
+		boolean addedToInventory = player.getInventory().insertStack(stack);
+		
+		if (addedToInventory) {
+			// Successfully added to inventory
+			return true;
+		}
+		
+		// Inventory full - spawn as entity at player location
+		net.minecraft.entity.ItemEntity itemEntity = new net.minecraft.entity.ItemEntity(
+			player.getWorld(),
+			player.getX(),
+			player.getY() + 0.5,
+			player.getZ(),
+			stack.copy() // Copy to avoid issues if insertStack modified it
+		);
+		itemEntity.setVelocity(0, 0, 0); // Drop straight down
+		player.getWorld().spawnEntity(itemEntity);
+		
+		// Warn player about inventory space
+		player.sendMessage(Text.literal(
+			"§eInv đầy! Item rơi xuống đất, nhặt ngay kẻo mất!"), false);
+		
+		FocusTimerShop.LOGGER.debug("PHASE3_CHEST: Spawned {} for {} (inventory full)", 
+			stack.getName().getString(), player.getName().getString());
+		
+		return false; // Had to spawn
+	}
+	
+	/**
+	 * PHASE 3 FIX (BUG #13): Periodic cleanup of old idempotency records
+	 * Called periodically (e.g., every minute) to prevent memory leak
+	 * Removes entries older than 5 minutes
+	 */
+	public static void cleanupOldIdempotencyRecords() {
+		long now = System.currentTimeMillis();
+		final int[] removedCount = {0}; // Use array for lambda mutability
+		
+		// Cleanup idempotency map
+		lastBulkRequestId.entrySet().removeIf(entry -> {
+			// Check if timestamp map has entry
+			Long timestamp = lastBulkTimestamp.get(entry.getKey());
+			if (timestamp != null && (now - timestamp) > IDEMPOTENCY_CLEANUP_AGE_MS) {
+				removedCount[0]++;
+				return true;
+			}
+			return false;
+		});
+		
+		// Cleanup timestamp map
+		lastBulkTimestamp.entrySet().removeIf(entry -> 
+			(now - entry.getValue()) > IDEMPOTENCY_CLEANUP_AGE_MS
+		);
+		
+		if (removedCount[0] > 0) {
+			FocusTimerShop.LOGGER.debug("PHASE3_CHEST: Cleaned up {} old bulk request records", removedCount[0]);
+		}
 	}
 }
