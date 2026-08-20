@@ -135,7 +135,10 @@ public class AchievementsTabScreen {
 			context.drawText(parent.getTextRenderer(), "§a✓ Hoàn thành: §f" + dateStr, 
 				textX, textY, 0xFF00FF00, false);
 		} else {
-			context.drawText(parent.getTextRenderer(), "§c✗ Chưa hoàn thành", 
+			// FIX 4b: Show actual unlock condition for locked achievements
+			// Format: "§c✗ Chưa hoàn thành - Cần: {condition description}"
+			String conditionText = getConditionDescription(def);
+			context.drawText(parent.getTextRenderer(), "§c✗ Chưa hoàn thành §7- Cần: §f" + conditionText, 
 				textX, textY, 0xFFFF5555, false);
 		}
 		textY += 12;
@@ -154,8 +157,9 @@ public class AchievementsTabScreen {
 				
 				context.fill(barX, barY, barX + barWidth, barY + barHeight, 0xFF222222);
 				
-				// Progress bar fill
-				float progressPercent = Math.min(1.0f, (float)progressCurrent / progressMax);
+				// FIX 4a: Clamp progress percent to [0, 1] to prevent overflow
+				// This ensures fill width never exceeds container width
+				float progressPercent = Math.max(0.0f, Math.min(1.0f, (float)progressCurrent / progressMax));
 				int fillWidth = (int)(barWidth * progressPercent);
 				context.fill(barX, barY, barX + fillWidth, barY + barHeight, 0xFF4A9EFF);
 				
@@ -168,6 +172,57 @@ public class AchievementsTabScreen {
 		}
 		
 		return y + rowHeight;
+	}
+	
+	/**
+	 * Get condition description for locked achievement
+	 * FIX 4b: Show actual unlock requirement instead of just "???"
+	 */
+	private String getConditionDescription(AchievementDefinition def) {
+		String type = def.getConditionType();
+		Object value = def.getConditionValue();
+		
+		// If description exists, use it (most detailed)
+		if (def.getDescription() != null && !def.getDescription().isEmpty()) {
+			return def.getDescription();
+		}
+		
+		// Otherwise, generate from condition type and value
+		if (value == null) {
+			return "???";
+		}
+		
+		int threshold = 0;
+		if (value instanceof Number) {
+			threshold = ((Number)value).intValue();
+		}
+		
+		switch (type) {
+			case "TOTAL_FOCUS_HOURS":
+				return threshold + " giờ tập trung";
+			case "TOTAL_SESSIONS":
+				return threshold + " phiên học";
+			case "STREAK_DAYS":
+				return threshold + " ngày liên tiếp";
+			case "LONGEST_SESSION_MINUTES":
+				return threshold + " phút trong 1 phiên";
+			case "TOTAL_ITEMS_PURCHASED":
+				return threshold + " vật phẩm đã mua";
+			case "TOTAL_CHESTS_OPENED":
+				return threshold + " rương đã mở";
+			case "TOTAL_SILVER_EARNED":
+				return threshold + " silver kiếm được";
+			case "TOTAL_SILVER_CONVERTED_TO_GOLD":
+				return threshold + " silver đã đổi vàng";
+			case "TOTAL_XP_EARNED_LIFETIME":
+				return threshold + " XP tích lũy";
+			case "TOTAL_BLOCKS_MINED":
+				return threshold + " khối đã đào";
+			case "SPECIAL":
+				return "Điều kiện đặc biệt";
+			default:
+				return type + ": " + value.toString();
+		}
 	}
 	
 	/**

@@ -170,7 +170,10 @@ public class EconomyManager {
 		com.focustimershop.database.PlayerStatsData stats = 
 			com.focustimershop.database.DatabaseManager.getPlayerStats(player.getUuid());
 		stats.setTotalSilverEarned(stats.getTotalSilverEarned() + silverEarned);
-		stats.setTotalXpEarned(stats.getTotalXpEarned() + xpEarned);
+		
+		// v1.0.6-beta SEASON SYSTEM - Update BOTH lifetime and seasonal XP
+		stats.setTotalXpEarned(stats.getTotalXpEarned() + xpEarned);  // Lifetime (never decays)
+		stats.setSeasonRankXp(stats.getSeasonRankXp() + xpEarned);    // Seasonal (decays monthly)
 		
 		// v1.0.6 Phase 1 - Add to daily stats (focus time, session count, XP)
 		stats.addDailyStat(elapsedSeconds, xpEarned);
@@ -182,6 +185,9 @@ public class EconomyManager {
 		
 		// v1.0.6 Phase 5 - Check achievements
 		com.focustimershop.achievement.AchievementManager.checkAchievements(player);
+		
+		// v1.0.7-beta - Check achievements from JSON (includes TIMER_TYPE_USES)
+		com.focustimershop.achievement.AchievementSystemManager.checkAndUnlockAchievements(player);
 		
 		// v1.0.6 Phase 6 - Check missions
 		com.focustimershop.mission.MissionManager.checkMissions(player);

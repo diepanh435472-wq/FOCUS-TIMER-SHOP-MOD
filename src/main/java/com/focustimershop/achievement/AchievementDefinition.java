@@ -66,4 +66,47 @@ public class AchievementDefinition {
 			default: return 0xFFFFFFFF; // White
 		}
 	}
+	
+	/**
+	 * v1.0.7-beta - Check if achievement condition is met
+	 * Supports TIMER_TYPE_USES for legacy timer type achievements
+	 */
+	public boolean checkCondition(com.focustimershop.database.PlayerStatsData stats) {
+		if (conditionType == null) {
+			return false;
+		}
+		
+		switch (conditionType) {
+			case "TIMER_TYPE_USES":
+				// conditionValue is [typeName, count] array
+				if (conditionValue instanceof java.util.List) {
+					java.util.List<?> list = (java.util.List<?>) conditionValue;
+					if (list.size() >= 2) {
+						String typeName = list.get(0).toString();
+						int requiredCount = ((Number) list.get(1)).intValue();
+						int actualCount = stats.getTimerTypeUse(typeName);
+						return actualCount >= requiredCount;
+					}
+				}
+				return false;
+				
+			case "TOTAL_SESSIONS":
+				if (conditionValue instanceof Number) {
+					long required = ((Number) conditionValue).longValue();
+					return stats.getTotalTimerSessionsCompleted() >= required;
+				}
+				return false;
+				
+			case "TOTAL_FOCUS_HOURS":
+				if (conditionValue instanceof Number) {
+					long required = ((Number) conditionValue).longValue();
+					long totalHours = stats.getTotalFocusTimeSeconds() / 3600;
+					return totalHours >= required;
+				}
+				return false;
+				
+			default:
+				return false;
+		}
+	}
 }

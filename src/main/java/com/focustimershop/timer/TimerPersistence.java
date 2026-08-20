@@ -24,15 +24,22 @@ public class TimerPersistence {
 	
 	/**
 	 * Data class for serialization
+	 * v1.0.7-beta: Added category, clockMode, encouragementNote, todoList
 	 */
 	public static class TimerSaveData {
-		public String type;           // POMODORO_FOCUS, STOPWATCH, COUNTDOWN, etc.
+		public String type;           // POMODORO_FOCUS, STOPWATCH, COUNTDOWN, etc. (legacy)
 		public String state;          // RUNNING, PAUSED, IDLE
 		public int elapsedSeconds;    // How long timer has been running
 		public int targetSeconds;     // Target time (0 for stopwatch)
 		public long lastTickTime;     // System.currentTimeMillis() of last update
 		public int pomodoroRounds;    // Completed pomodoro rounds
 		public long savedAt;          // When this save was created
+		
+		// v1.0.7-beta: New category/mode system
+		public String category;               // TAP_TRUNG, NGHI_NGAN, NGHI_DAI, TAP_LUYEN
+		public String clockMode;              // COUNTDOWN, STOPWATCH
+		public String encouragementNote;      // User's encouragement note
+		public java.util.List<String> todoList;  // User's todo items
 		
 		public TimerSaveData() {
 			// For GSON deserialization
@@ -46,6 +53,12 @@ public class TimerPersistence {
 			this.lastTickTime = session.getLastTickTime();
 			this.pomodoroRounds = session.getPomodoroRounds();
 			this.savedAt = System.currentTimeMillis();
+			
+			// v1.0.7-beta: Save new fields
+			this.category = session.getCategory() != null ? session.getCategory().name() : null;
+			this.clockMode = session.getClockMode() != null ? session.getClockMode().name() : null;
+			this.encouragementNote = session.getEncouragementNote();
+			this.todoList = session.getTodoList();
 		}
 	}
 	
@@ -157,6 +170,7 @@ public class TimerPersistence {
 	
 	/**
 	 * Restore timer session from save data
+	 * v1.0.7-beta: Restore category/mode/note/todos if present
 	 * 
 	 * @param playerId Player UUID
 	 * @param data Save data loaded from disk
@@ -166,8 +180,36 @@ public class TimerPersistence {
 		TimerType type = TimerType.valueOf(data.type);
 		TimerState state = TimerState.valueOf(data.state);
 		
-		// Create session with saved data
-		TimerSession session = new TimerSession(playerId, type, data.targetSeconds);
+		// v1.0.7-beta: Check if this is a v2 save with category/mode
+		TimerSession session;
+		if (data.category != null && data.clockMode != null) {
+			try {
+				SessionCategory category = SessionCategory.valueOf(data.category);
+				ClockMode clockMode = ClockMode.valueOf(data.clockMode);
+				
+				// Create v2 session
+				session = new TimerSession(
+					playerId, 
+					category, 
+					clockMode, 
+					data.targetSeconds,
+					data.encouragementNote,
+					data.todoList
+				);
+				
+				FocusTimerShop.LOGGER.info("Restored v2 timer with category={}, mode={}", 
+					data.category, data.clockMode);
+			} catch (IllegalArgumentException e) {
+				FocusTimerShop.LOGGER.warn("Invalid category/mode in save, falling back to legacy: {}", 
+					e.getMessage());
+				// Fall back to legacy
+				session = new TimerSession(playerId, type, data.targetSeconds);
+			}
+		} else {
+			// Legacy v1 save - use old constructor
+			session = new TimerSession(playerId, type, data.targetSeconds);
+			FocusTimerShop.LOGGER.info("Restored legacy v1 timer");
+		}
 		
 		// Restore elapsed time
 		session.setElapsedTime(data.elapsedSeconds);

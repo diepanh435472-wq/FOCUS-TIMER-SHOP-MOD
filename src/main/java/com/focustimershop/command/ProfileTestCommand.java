@@ -93,9 +93,9 @@ public class ProfileTestCommand {
 		long xp = com.mojang.brigadier.arguments.LongArgumentType.getLong(context, "xp");
 		ProfileManager.awardFocusXp(player, xp);
 		
-		// Phase A - read XP from PlayerStatsData
+		// Phase A - read XP from PlayerStatsData (v1.0.6-beta Season System - use seasonRankXp)
 		var stats = com.focustimershop.database.DatabaseManager.getPlayerStats(player.getUuid());
-		var rank = RankManager.resolveRank(stats.getTotalXpEarned());
+		var rank = RankManager.resolveRank(stats.getSeasonRankXp());
 		
 		context.getSource().sendMessage(Text.literal(
 			String.format("§aAwarded %d XP! Total: %d XP | Rank: %s", 

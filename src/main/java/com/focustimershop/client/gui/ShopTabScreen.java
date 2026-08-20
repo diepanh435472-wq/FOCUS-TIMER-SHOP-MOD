@@ -37,6 +37,9 @@ public class ShopTabScreen {
 	// ===== DOUBLE CLICK PREVENTION =====
 	private long lastClickTime = 0;
 	private static final long CLICK_COOLDOWN_MS = 300;  // 300ms cooldown between clicks
+	
+	// Per-button cooldowns for fine-grained control
+	private long lastCartButtonClickTime = 0;
 	// ===================================
 	
 	// ===== TAB HORIZONTAL SCROLL =====
@@ -228,10 +231,8 @@ public class ShopTabScreen {
 			renderItemCell(context, item, cellX, cellY, GRID_ICON_SIZE, mouseX, mouseY);
 		}
 		
-		// Scroll indicator
-		if (totalRows > visibleRows) {
-			context.drawText(parent.getTextRenderer(), "§7↕ Scroll", x + width - 50, y - 15, 0xFF888888, false);
-		}
+		// Scroll indicator (removed - cleaner UI without text hints)
+		// Grid is clearly scrollable, no need for text indicator
 	}
 
 	private void renderItemCell(DrawContext context, ShopItem item, int x, int y, int size, int mouseX, int mouseY) {
@@ -361,9 +362,9 @@ public class ShopTabScreen {
 			
 			currentY += lineHeight;
 			
+			// Cart overflow indicator removed - cleaner without text
 			// Stop if exceeds height
 			if (currentY - y > height - lineHeight) {
-				context.drawText(parent.getTextRenderer(), "§7...scroll", x + 5, currentY, 0xFF888888, false);
 				break;
 			}
 		}
@@ -664,7 +665,11 @@ public class ShopTabScreen {
 			int decreaseX = cartListX + cartListWidth - btnSize * 2 - 5;
 			if (mouseX >= decreaseX && mouseX <= decreaseX + btnSize &&
 			    mouseY >= btnY && mouseY <= btnY + btnSize) {
-				cart.decreaseItem(itemId);
+				long currentTime = System.currentTimeMillis();
+				if (currentTime - lastCartButtonClickTime >= CLICK_COOLDOWN_MS) {
+					cart.decreaseItem(itemId);
+					lastCartButtonClickTime = currentTime;
+				}
 				return true;
 			}
 			
@@ -672,7 +677,11 @@ public class ShopTabScreen {
 			int removeX = cartListX + cartListWidth - btnSize;
 			if (mouseX >= removeX && mouseX <= removeX + btnSize &&
 			    mouseY >= btnY && mouseY <= btnY + btnSize) {
-				cart.removeItem(itemId);
+				long currentTime = System.currentTimeMillis();
+				if (currentTime - lastCartButtonClickTime >= CLICK_COOLDOWN_MS) {
+					cart.removeItem(itemId);
+					lastCartButtonClickTime = currentTime;
+				}
 				return true;
 			}
 			
@@ -825,7 +834,13 @@ public class ShopTabScreen {
 					
 					if (mouseX >= cellX && mouseX <= cellX + GRID_ICON_SIZE &&
 					    mouseY >= cellY && mouseY <= cellY + GRID_ICON_SIZE) {
-						cart.addItem(item.getItemId(), 1);
+						// FIX: Add cooldown check here too (same as mouseClicked)
+						// Prevents double-add when both mouseClicked and mouseReleased fire
+						long currentTime = System.currentTimeMillis();
+						if (currentTime - lastClickTime >= CLICK_COOLDOWN_MS) {
+							cart.addItem(item.getItemId(), 1);
+							lastClickTime = currentTime;
+						}
 						break;
 					}
 				}

@@ -37,6 +37,7 @@ public class ModNetworking {
 	public static final Identifier RENTAL_EXPIRED = new Identifier(FocusTimerShop.MOD_ID, "rental_expired"); // PHASE 4: Server notifies client when rental expires (BUG #21 fix)
 	public static final Identifier PROFILE_SYNC = new Identifier(FocusTimerShop.MOD_ID, "profile_sync"); // v1.0.6 - Server sends profile data to client
 	public static final Identifier CUSTOM_NAME_UPDATE = new Identifier(FocusTimerShop.MOD_ID, "custom_name_update"); // v1.0.6 - Client updates custom name
+	public static final Identifier BULK_ORDER_PURCHASE = new Identifier(FocusTimerShop.MOD_ID, "bulk_order_purchase"); // v1.0.6-beta - Bulk order purchase
 
 	// Server-side packet handlers
 	public static void registerServerPackets() {
@@ -417,6 +418,54 @@ public class ModNetworking {
 			}
 		});
 		
+		// v1.0.6-beta - Bulk order purchase
+		ServerPlayNetworking.registerGlobalReceiver(BULK_ORDER_PURCHASE, (server, player, handler, buf, responseSender) -> {
+			try {
+				// SECURITY: Validate string length for item ID
+				String itemId = buf.readString(256);
+				int chestCount = buf.readInt();
+				boolean useSilverOnly = buf.readBoolean();
+				
+				// SECURITY: Validate chest count (positive, reasonable limit)
+				if (chestCount < 1 || chestCount > 1000) {
+					FocusTimerShop.LOGGER.warn("SECURITY: Player {} sent invalid chest count: {}", 
+						player.getName().getString(), chestCount);
+					return;
+				}
+				
+				// SECURITY: Validate item ID not empty
+				if (itemId.trim().isEmpty()) {
+					FocusTimerShop.LOGGER.warn("SECURITY: Player {} sent empty item ID", 
+						player.getName().getString());
+					return;
+				}
+				
+				// Rate limiting for bulk purchases
+				if (!com.focustimershop.util.RateLimiter.tryRequest(
+						player.getUuid(), player.getName().getString(), 
+						"BULK_ORDER_PURCHASE", com.focustimershop.util.RateLimiter.Limits.SHOP_CHECKOUT)) {
+					long resetMs = com.focustimershop.util.RateLimiter.getResetTimeMs(
+						player.getUuid(), "BULK_ORDER_PURCHASE", 
+						com.focustimershop.util.RateLimiter.Limits.SHOP_CHECKOUT);
+					player.sendMessage(
+						net.minecraft.text.Text.literal("§cMua hàng quá nhanh! Vui lòng chờ " + 
+							com.focustimershop.util.RateLimiter.formatResetTime(resetMs)),
+						false
+					);
+					return;
+				}
+				
+				server.execute(() -> {
+					com.focustimershop.bulkorder.BulkOrderManager.handleBulkPurchase(
+						player, itemId, chestCount, useSilverOnly
+					);
+				});
+			} catch (Exception e) {
+				FocusTimerShop.LOGGER.warn("Invalid BULK_ORDER_PURCHASE packet from {}: {}", 
+					player.getName().getString(), e.getMessage());
+			}
+		});
+		
 		// v1.0.6 Phase 5 - Equip title
 		ServerPlayNetworking.registerGlobalReceiver(NetworkHandler.EQUIP_TITLE_C2S, (server, player, handler, buf, responseSender) -> {
 			try {
@@ -580,7 +629,9 @@ public class ModNetworking {
 			try {
 				String inGameName = buf.readString();
 				String customName = buf.readString();
-				long totalFocusXpEarned = buf.readLong();
+				long totalFocusXpEarned = buf.readLong(); // Lifetime
+				long seasonRankXp = buf.readLong(); // v1.0.6-beta Season System
+				int currentSeasonNumber = buf.readInt(); // v1.0.6-beta Season System
 				int currentStreakDays = buf.readInt();
 				int longestStreakDays = buf.readInt();
 				int longestSingleSessionSeconds = buf.readInt();
@@ -599,9 +650,9 @@ public class ModNetworking {
 				
 				client.execute(() -> {
 					com.focustimershop.client.ClientProfileCache.updateProfile(
-						inGameName, customName, totalFocusXpEarned, currentStreakDays, longestStreakDays,
-						longestSingleSessionSeconds, totalSessionsCompleted, totalFocusTimeSeconds,
-						favoriteTimerType, profileCreatedAtEpochSeconds
+						inGameName, customName, totalFocusXpEarned, seasonRankXp, currentSeasonNumber,
+						currentStreakDays, longestStreakDays, longestSingleSessionSeconds, 
+						totalSessionsCompleted, totalFocusTimeSeconds, favoriteTimerType, profileCreatedAtEpochSeconds
 					);
 					com.focustimershop.client.ClientProfileCache.setLastFocusDate(lastFocusDate);
 					
@@ -716,6 +767,17 @@ public class ModNetworking {
 	}
 	
 	/**
+	 * Send bulk order purchase request (v1.0.6-beta)
+	 */
+	public static void sendBulkOrderPurchase(String itemId, int chestCount, boolean useSilverOnly) {
+		PacketByteBuf buf = PacketByteBufs.create();
+		buf.writeString(itemId);
+		buf.writeInt(chestCount);
+		buf.writeBoolean(useSilverOnly);
+		ClientPlayNetworking.send(BULK_ORDER_PURCHASE, buf);
+	}
+	
+	/**
 	 * Send bulk chest result to client (11 rewards)
 	 * Only send if player is fully connected and world is ready
 	 */
@@ -796,7 +858,9 @@ public class ModNetworking {
 			PacketByteBuf buf = PacketByteBufs.create();
 			buf.writeString(profile.getInGameName());
 			buf.writeString(profile.getCustomName() != null ? profile.getCustomName() : "");
-			buf.writeLong(stats.getTotalXpEarned()); // From stats, not profile (Phase 0 - long)
+			buf.writeLong(stats.getTotalXpEarned()); // Lifetime XP (Phase 0 - long)
+			buf.writeLong(stats.getSeasonRankXp()); // v1.0.6-beta Season System - Seasonal XP
+			buf.writeInt(stats.getCurrentSeasonNumber()); // v1.0.6-beta Season System - Season number
 			buf.writeInt(profile.getCurrentStreakDays());
 			buf.writeInt(profile.getLongestStreakDays());
 			buf.writeInt(profile.getLongestSingleSessionSeconds());

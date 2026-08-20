@@ -20,8 +20,9 @@ public class MainMenuScreen extends Screen {
 
 	private GuiTab currentTab = GuiTab.TIMER;
 	
-	private TimerTabScreen timerTab;
+	private TimerTabScreenV2 timerTab;  // v1.0.7-beta - New UI
 	private ShopTabScreen shopTab;
+	private BulkOrderTabScreen bulkOrderTab;  // v1.0.6-beta
 	private LuckyChestTabScreen chestTab;
 	private RentalTabScreen rentalTab;
 	private ProfileTabScreen profileTab;  // v1.0.6
@@ -45,10 +46,13 @@ public class MainMenuScreen extends Screen {
 		
 		// Initialize tab screens only if not already initialized
 		if (timerTab == null) {
-			timerTab = new TimerTabScreen(this);
+			timerTab = new TimerTabScreenV2(this);  // v1.0.7-beta - New UI
 		}
 		if (shopTab == null) {
 			shopTab = new ShopTabScreen(this);
+		}
+		if (bulkOrderTab == null) {
+			bulkOrderTab = new BulkOrderTabScreen(this);  // v1.0.6-beta
 		}
 		if (chestTab == null) {
 			chestTab = new LuckyChestTabScreen(this);
@@ -66,6 +70,23 @@ public class MainMenuScreen extends Screen {
 
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+		// Check if Timer tab has a modal open - if so, render ONLY the modal with dim overlay
+		if (currentTab == GuiTab.TIMER && timerTab != null && timerTab.isShowingModal()) {
+			// Dim overlay covering ENTIRE screen (including sidebar)
+			context.fill(0, 0, this.width, this.height, 0xDD000000);
+			
+			// Let timer tab render its modal content
+			int contentX = 150;
+			int contentY = 50;
+			int contentWidth = this.width - 170;
+			int contentHeight = this.height - 70;
+			timerTab.render(context, contentX, contentY, contentWidth, contentHeight, mouseX, mouseY, delta);
+			
+			super.render(context, mouseX, mouseY, delta);
+			return; // Skip normal rendering
+		}
+		
+		// Normal rendering (no modal open)
 		// Dark background
 		renderBackground(context);
 
@@ -99,9 +120,9 @@ public class MainMenuScreen extends Screen {
 		int tabHeight = 40;
 		int spacing = 5;
 
-		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.LUCKY_CHEST, GuiTab.RENTAL, GuiTab.PROFILE};
-		String[] icons = {"⏱", "🛒", "🎁", "🔧", "👤"};
-		String[] labels = {"Timer", "Shop", "Lucky Chest", "Thuê", "Profile"};
+		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.BULK_ORDER, GuiTab.LUCKY_CHEST, GuiTab.RENTAL, GuiTab.PROFILE};
+		String[] icons = {"⏱", "🛒", "📦", "🎁", "🔧", "👤"};
+		String[] labels = {"Timer", "Shop", "Bulk Order", "Lucky Chest", "Thuê", "Profile"};
 
 		for (int i = 0; i < tabs.length; i++) {
 			GuiTab tab = tabs[i];
@@ -247,6 +268,9 @@ public class MainMenuScreen extends Screen {
 			case SHOP:
 				shopTab.render(context, contentX, contentY, contentWidth, contentHeight, mouseX, mouseY, delta);
 				break;
+			case BULK_ORDER:
+				bulkOrderTab.render(context, contentX, contentY, contentWidth, contentHeight, mouseX, mouseY);
+				break;
 			case LUCKY_CHEST:
 				chestTab.render(context, contentX, contentY, contentWidth, contentHeight, mouseX, mouseY, delta);
 				break;
@@ -293,7 +317,7 @@ public class MainMenuScreen extends Screen {
 		int tabHeight = 40;
 		int spacing = 5;
 
-		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.LUCKY_CHEST, GuiTab.RENTAL, GuiTab.PROFILE};
+		GuiTab[] tabs = {GuiTab.TIMER, GuiTab.SHOP, GuiTab.BULK_ORDER, GuiTab.LUCKY_CHEST, GuiTab.RENTAL, GuiTab.PROFILE};
 		for (int i = 0; i < tabs.length; i++) {
 			int btnY = tabY + i * (tabHeight + spacing);
 			if (mouseX >= sidebarX && mouseX <= sidebarX + tabWidth &&
@@ -317,6 +341,9 @@ public class MainMenuScreen extends Screen {
 			case SHOP:
 				handled = shopTab.mouseClicked(mouseX, mouseY, button, contentX, contentY, contentWidth, contentHeight);
 				break;
+			case BULK_ORDER:
+				handled = bulkOrderTab.mouseClicked(mouseX, mouseY, button, contentX, contentY, contentWidth, contentHeight);
+				break;
 			case LUCKY_CHEST:
 				handled = chestTab.mouseClicked(mouseX, mouseY, button, contentX, contentY, contentWidth, contentHeight);
 				break;
@@ -339,6 +366,8 @@ public class MainMenuScreen extends Screen {
 	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
 		if (currentTab == GuiTab.SHOP) {
 			return shopTab.mouseScrolled(mouseX, mouseY, 0, amount);
+		} else if (currentTab == GuiTab.BULK_ORDER) {
+			return bulkOrderTab.mouseScrolled(mouseX, mouseY, 0, amount);
 		} else if (currentTab == GuiTab.LUCKY_CHEST) {
 			return chestTab.mouseScrolled(mouseX, mouseY, amount);
 		} else if (currentTab == GuiTab.PROFILE) {
@@ -370,6 +399,10 @@ public class MainMenuScreen extends Screen {
 			if (shopTab.keyPressed(keyCode, scanCode, modifiers)) {
 				return true;
 			}
+		} else if (currentTab == GuiTab.BULK_ORDER) {
+			if (bulkOrderTab.keyPressed(keyCode, scanCode, modifiers)) {
+				return true;
+			}
 		}
 		return super.keyPressed(keyCode, scanCode, modifiers);
 	}
@@ -381,6 +414,10 @@ public class MainMenuScreen extends Screen {
 			if (shopTab.charTyped(chr, modifiers)) {
 				return true;
 			}
+		} else if (currentTab == GuiTab.BULK_ORDER) {
+			if (bulkOrderTab.charTyped(chr, modifiers)) {
+				return true;
+			}
 		}
 		return super.charTyped(chr, modifiers);
 	}
@@ -388,6 +425,7 @@ public class MainMenuScreen extends Screen {
 	enum GuiTab {
 		TIMER,
 		SHOP,
+		BULK_ORDER,  // v1.0.6-beta
 		LUCKY_CHEST,
 		RENTAL,
 		PROFILE  // v1.0.6

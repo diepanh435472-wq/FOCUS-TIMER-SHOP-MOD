@@ -16,6 +16,7 @@ import net.minecraft.world.World;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Handles 3x3 area mining for rental pickaxes and shovels
@@ -50,6 +51,14 @@ public class AreaMiningHandler {
 			return;
 		}
 		
+		// DEEP AUDIT FIX: Validate rental ownership and expiry BEFORE allowing area mining
+		ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
+		if (!RentalManager.isValidRentalTool(serverPlayer, tool)) {
+			FocusTimerShop.LOGGER.warn("DEEP_AUDIT: Player {} attempted area mining with invalid/expired rental tool", 
+				player.getName().getString());
+			return; // Tool is invalid - owned by someone else or expired
+		}
+		
 		String rentalType = nbt.getString("RentalType");
 		
 		// PHASE 4: BUG #27 FIX - Validate rental type
@@ -68,7 +77,6 @@ public class AreaMiningHandler {
 		
 		// Handle different tool types
 		ServerWorld serverWorld = (ServerWorld) world;
-		ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
 		int brokenCount = 0;
 		
 		if (rentalType.equals("AXE")) {
@@ -82,7 +90,7 @@ public class AreaMiningHandler {
 		// Track stats if any blocks were broken
 		if (brokenCount > 0) {
 			trackBlocksMinedStats(serverPlayer, brokenCount);
-			FocusTimerShop.LOGGER.debug("Player {} mined: {} blocks broken", 
+			FocusTimerShop.LOGGER.debug("Player {} area mined: {} blocks broken", 
 				player.getName().getString(), brokenCount);
 		}
 	}
@@ -212,7 +220,11 @@ public class AreaMiningHandler {
 	
 	/**
 	 * Track blocks mined in player stats
+	 * DEEP AUDIT FIX: Batch saves to prevent disk I/O spam (was saving 200x during tree chop!)
 	 */
+	private static final Map<java.util.UUID, Long> lastStatsSaveTime = new java.util.concurrent.ConcurrentHashMap<>();
+	private static final long SAVE_THROTTLE_MS = 1000; // Save at most once per second per player
+	
 	private static void trackBlocksMinedStats(ServerPlayerEntity player, int blocksCount) {
 		try {
 			com.focustimershop.database.PlayerStatsData stats = 
@@ -220,7 +232,21 @@ public class AreaMiningHandler {
 			
 			if (stats != null) {
 				stats.addBlocksMined(blocksCount);
-				com.focustimershop.database.DatabaseManager.savePlayerStats(stats);
+				
+				// DEEP AUDIT FIX: Throttle saves to prevent performance issues
+				java.util.UUID uuid = player.getUuid();
+				long now = System.currentTimeMillis();
+				Long lastSave = lastStatsSaveTime.get(uuid);
+				
+				if (lastSave == null || (now - lastSave) >= SAVE_THROTTLE_MS) {
+					com.focustimershop.database.DatabaseManager.savePlayerStats(stats);
+					lastStatsSaveTime.put(uuid, now);
+					FocusTimerShop.LOGGER.debug("DEEP_AUDIT: Saved stats for {} (throttled)", 
+						player.getName().getString());
+				} else {
+					FocusTimerShop.LOGGER.debug("DEEP_AUDIT: Skipped save for {} (throttled, {}ms ago)", 
+						player.getName().getString(), now - lastSave);
+				}
 			}
 		} catch (Exception e) {
 			FocusTimerShop.LOGGER.error("Failed to track blocks mined stats", e);

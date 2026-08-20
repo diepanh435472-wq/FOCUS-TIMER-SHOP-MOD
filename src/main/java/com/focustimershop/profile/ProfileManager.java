@@ -93,11 +93,14 @@ public class ProfileManager {
 		// Sync to client (v1.0.6)
 		com.focustimershop.network.ModNetworking.sendProfileSync(player, profile);
 		
-		// Rank is now derived from PlayerStatsData.totalXpEarned
-		long totalXp = com.focustimershop.database.DatabaseManager.getPlayerStats(player.getUuid()).getTotalXpEarned();
+		// v1.0.6-beta Season System - Check for end-of-season summary
+		checkAndShowSeasonSummary(player);
+		
+		// v1.0.6-beta Season System - Rank is now derived from seasonRankXp (decays monthly)
+		long seasonXp = com.focustimershop.database.DatabaseManager.getPlayerStats(player.getUuid()).getSeasonRankXp();
 		FocusTimerShop.LOGGER.info("Player {} joined - Profile loaded (Rank: {})", 
 			player.getName().getString(), 
-			RankManager.resolveRank(totalXp).getDisplayName());
+			RankManager.resolveRank(seasonXp).getDisplayName());
 	}
 	
 	/**
@@ -111,7 +114,8 @@ public class ProfileManager {
 	}
 	
 	/**
-	 * Award Focus XP and check for rank-up (Phase A - uses PlayerStatsData)
+	 * Award Focus XP and check for rank-up (v1.0.6-beta Season System)
+	 * Uses seasonRankXp for rank calculation (decays monthly)
 	 */
 	public static void awardFocusXp(ServerPlayerEntity player, long xp) {
 		// XP is already tracked in PlayerStatsData by EconomyManager
@@ -119,8 +123,9 @@ public class ProfileManager {
 		com.focustimershop.database.PlayerStatsData stats = 
 			com.focustimershop.database.DatabaseManager.getPlayerStats(player.getUuid());
 		
-		long oldXP = stats.getTotalXpEarned() - xp; // Before this award
-		long newXP = stats.getTotalXpEarned();
+		// v1.0.6-beta Season System - Use seasonRankXp for rank calculations
+		long oldXP = stats.getSeasonRankXp() - xp; // Before this award
+		long newXP = stats.getSeasonRankXp();
 		
 		// Check for rank-up
 		RankTier newRank = RankManager.checkRankUp(oldXP, newXP);
@@ -277,4 +282,50 @@ public class ProfileManager {
 		}
 		profileCache.clear();
 	}
+	
+	/**
+	 * Check and show end-of-season summary if player has one (v1.0.6-beta Season System)
+	 * Called on player join
+	 */
+	private static void checkAndShowSeasonSummary(ServerPlayerEntity player) {
+		com.focustimershop.season.SeasonSummary summary = 
+			com.focustimershop.season.SeasonManager.loadSeasonSummary(player.getUuid());
+		
+		if (summary == null) {
+			return; // No summary to show
+		}
+		
+		// Calculate ranks from XP values
+		com.focustimershop.profile.RankTier oldRank = 
+			RankManager.resolveRank(summary.getOldSeasonXp());
+		com.focustimershop.profile.RankTier newRank = 
+			RankManager.resolveRank(summary.getNewSeasonXp());
+		
+		// Format message
+		String message = String.format(
+			"§6§l═══════════════════════════════\n" +
+			"§e§lSS%d đã kết thúc!\n" +
+			"§7Rank cao nhất đạt được: §f%s\n" +
+			"§7XP mùa này: §e%d\n" +
+			"§7Rank mới: §f%s §7(sau khi trừ 95%%)\n" +
+			"§6§l═══════════════════════════════",
+			summary.getSeasonNumber(),
+			oldRank.getDisplayName(),
+			summary.getOldSeasonXp(),
+			newRank.getDisplayName()
+		);
+		
+		// Send to player
+		player.sendMessage(net.minecraft.text.Text.literal(message), false);
+		
+		// Delete summary after showing (one-time display)
+		com.focustimershop.season.SeasonManager.deleteSeasonSummary(player.getUuid());
+		
+		FocusTimerShop.LOGGER.info("Showed season summary to {}: SS{} ended, {} → {} XP", 
+			player.getName().getString(), 
+			summary.getSeasonNumber(),
+			summary.getOldSeasonXp(),
+			summary.getNewSeasonXp());
+	}
 }
+

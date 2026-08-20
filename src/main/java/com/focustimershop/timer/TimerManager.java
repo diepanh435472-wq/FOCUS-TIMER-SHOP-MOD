@@ -139,6 +139,10 @@ public class TimerManager {
 			stats.setTotalTimerSessionsCompleted(stats.getTotalTimerSessionsCompleted() + 1);
 			stats.setTotalFocusTimeSeconds(stats.getTotalFocusTimeSeconds() + elapsedSeconds);
 			
+			// v1.0.7-beta - Track timer type uses for achievements
+			String legacyTypeName = session.getLegacyTypeNameForAchievements();
+			stats.incrementTimerTypeUse(legacyTypeName);
+			
 			// Phase B - Activity log
 			int silverEarned = elapsedSeconds / 45;
 			int xpEarned = elapsedSeconds / 90;

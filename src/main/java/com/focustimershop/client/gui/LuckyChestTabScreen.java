@@ -22,6 +22,10 @@ public class LuckyChestTabScreen {
 	private int selectedChestIndex = 0;
 	private boolean showDetailModal = false; // Modal state for "Xem thêm"
 	private int modalScrollOffset = 0; // Scroll position for modal content
+	
+	// Track modal content height for proper scroll clamping (fix infinite scroll bug)
+	private int modalContentHeight = 0;
+	private int modalViewportHeight = 0;
 
 	public LuckyChestTabScreen(MainMenuScreen parent) {
 		this.parent = parent;
@@ -341,12 +345,14 @@ public class LuckyChestTabScreen {
 		int contentX = modalX + 15;
 		int contentWidth = modalWidth - 30;
 		int visibleHeight = modalHeight - 50; // Visible area height
+		modalViewportHeight = visibleHeight; // Store for scroll clamping
 		
 		// Enable scissor for scrolling (clip content outside visible area)
 		context.enableScissor(modalX, contentStartY, modalX + modalWidth, modalY + modalHeight - 10);
 		
 		// Apply scroll offset
 		int contentY = contentStartY - modalScrollOffset;
+		int contentStartTracking = contentY; // Track where content rendering starts
 		
 		// Section: Drop Rates by Rarity
 		context.drawText(parent.getTextRenderer(), "§e§lXác suất theo độ hiếm:", contentX, contentY, 0xFFFFAA00, true);
@@ -479,6 +485,10 @@ public class LuckyChestTabScreen {
 		context.drawText(parent.getTextRenderer(), "§7• Gói x10+1: mua 10 tặng 1 (11 lần mở độc lập)", contentX + 5, contentY, 0xFF888888, false);
 		contentY += 14;
 		context.drawText(parent.getTextRenderer(), "§7• Cuộn chuột để xem thêm", contentX + 5, contentY, 0xFF888888, false);
+		contentY += 14;
+		
+		// Calculate total content height for scroll clamping
+		modalContentHeight = contentY - contentStartTracking;
 		
 		// Disable scissor
 		context.disableScissor();
@@ -622,6 +632,7 @@ public class LuckyChestTabScreen {
 	
 	/**
 	 * Handle mouse scroll for modal scrolling
+	 * FIX: Properly clamp scroll to actual content height (prevent infinite scroll)
 	 */
 	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
 		if (showDetailModal) {
@@ -629,10 +640,10 @@ public class LuckyChestTabScreen {
 			int scrollAmount = (int) (amount * 20); // 20 pixels per scroll tick
 			modalScrollOffset -= scrollAmount;
 			
-			// Clamp scroll offset (min 0, max determined by content height)
-			modalScrollOffset = Math.max(0, modalScrollOffset);
-			// Note: Max scroll is hard to calculate dynamically, let user scroll freely
-			// Content will just stop showing when reaching bottom
+			// Clamp scroll offset: min 0, max = contentHeight - viewportHeight
+			// This ensures scroll stops exactly at the end of real content
+			int maxScroll = Math.max(0, modalContentHeight - modalViewportHeight);
+			modalScrollOffset = Math.max(0, Math.min(modalScrollOffset, maxScroll));
 			
 			return true; // Consume scroll event
 		}

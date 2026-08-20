@@ -16,10 +16,18 @@ public class PlayerStatsData {
 	private long totalFocusTimeSeconds = 0;
 	private long totalSilverEarned = 0;
 	private long totalSilverConvertedToGold = 0; // v1.0.6 Phase A - renamed from totalGoldEarned
-	private long totalXpEarned = 0;
+	private long totalXpEarned = 0; // LIFETIME XP - NEVER decayed, drives Achievements/Titles/Bests
 	private long totalChestsOpened = 0;
 	private long totalItemsPurchased = 0;
 	private long totalBlocksMined = 0; // Track blocks mined with rental tools
+	
+	// v1.0.6-beta SEASON SYSTEM - Separate seasonal XP for rank display
+	private long seasonRankXp = 0; // THIS is what Rank is calculated from, gets decayed monthly
+	private int currentSeasonNumber = 1; // Season counter (SS1, SS2, SS3...)
+	
+	// v1.0.7-beta Timer UI Overhaul - Track timer type uses for achievement mapping
+	// Maps legacy type names ("Pomodoro", "Stopwatch", "Countdown") to use counts
+	private java.util.Map<String, Integer> timerTypeUses = new java.util.HashMap<>();
 	
 	// v1.0.6 Phase 1 - Shared daily stats (last 30 days max)
 	// Replaces old dailyFocusSeconds map - now tracks focus time, session count, and XP per day
@@ -79,6 +87,50 @@ public class PlayerStatsData {
 	public long getTotalBlocksMined() { return totalBlocksMined; }
 	public void setTotalBlocksMined(long totalBlocksMined) { 
 		this.totalBlocksMined = Math.max(0, totalBlocksMined); 
+	}
+	
+	// v1.0.6-beta Season System - Getters/Setters
+	public long getSeasonRankXp() { return seasonRankXp; }
+	public void setSeasonRankXp(long seasonRankXp) { 
+		this.seasonRankXp = Math.max(0, seasonRankXp); 
+	}
+	
+	public int getCurrentSeasonNumber() { return currentSeasonNumber; }
+	public void setCurrentSeasonNumber(int currentSeasonNumber) { 
+		this.currentSeasonNumber = Math.max(1, currentSeasonNumber); 
+	}
+	
+	// v1.0.7-beta Timer UI Overhaul - Timer type uses
+	public java.util.Map<String, Integer> getTimerTypeUses() {
+		if (timerTypeUses == null) {
+			timerTypeUses = new java.util.HashMap<>();
+		}
+		return timerTypeUses;
+	}
+	
+	public void setTimerTypeUses(java.util.Map<String, Integer> timerTypeUses) {
+		this.timerTypeUses = timerTypeUses;
+	}
+	
+	/**
+	 * Increment timer type use count for legacy achievement mapping
+	 * @param legacyTypeName "Pomodoro", "Stopwatch", or "Countdown"
+	 */
+	public void incrementTimerTypeUse(String legacyTypeName) {
+		if (timerTypeUses == null) {
+			timerTypeUses = new java.util.HashMap<>();
+		}
+		timerTypeUses.put(legacyTypeName, timerTypeUses.getOrDefault(legacyTypeName, 0) + 1);
+	}
+	
+	/**
+	 * Get timer type use count
+	 */
+	public int getTimerTypeUse(String legacyTypeName) {
+		if (timerTypeUses == null) {
+			return 0;
+		}
+		return timerTypeUses.getOrDefault(legacyTypeName, 0);
 	}
 	
 	public java.util.Map<String, DailyStat> getDailyStats() { 
@@ -311,5 +363,18 @@ public class PlayerStatsData {
 		}
 		
 		return result;
+	}
+	
+	/**
+	 * Initialize seasonal XP from lifetime XP (v1.0.6-beta Season System)
+	 * Called once for existing players when season system is first activated
+	 * For new players, both will be 0 and grow together
+	 */
+	public void initializeSeasonalXpIfNeeded() {
+		// If seasonRankXp is 0 but totalXpEarned > 0, this is an existing player
+		// Copy totalXpEarned to seasonRankXp for migration
+		if (seasonRankXp == 0 && totalXpEarned > 0) {
+			seasonRankXp = totalXpEarned;
+		}
 	}
 }

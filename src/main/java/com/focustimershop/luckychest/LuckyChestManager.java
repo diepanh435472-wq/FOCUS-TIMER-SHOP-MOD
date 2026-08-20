@@ -25,8 +25,10 @@ public class LuckyChestManager {
 	private static final Map<ChestRarity, List<LootReward>> lootPools = new HashMap<>();
 	
 	// PHASE 3: Separate idempotency from cooldown (BUG #7, #8, #13)
-	// Idempotency: Track requestId to prevent duplicate processing
-	private static final Map<UUID, Long> lastBulkRequestId = new java.util.concurrent.ConcurrentHashMap<>();
+	// DEEP AUDIT FIX: Use Set<Long> to track multiple requestIds (prevent A→B→A attack)
+	private static final Map<UUID, Set<Long>> processedBulkRequestIds = new java.util.concurrent.ConcurrentHashMap<>();
+	private static final int MAX_TRACKED_REQUESTS = 100; // Per player - prevent memory leak
+	
 	// Cooldown: Track timestamp to rate-limit requests
 	private static final Map<UUID, Long> lastBulkTimestamp = new java.util.concurrent.ConcurrentHashMap<>();
 	private static final long REQUEST_COOLDOWN_MS = 2000; // 2 second cooldown between bulk requests
@@ -231,14 +233,25 @@ public class LuckyChestManager {
 		ensureInitialized();
 		UUID playerId = player.getUuid();
 		
-		// PHASE 3 FIX (BUG #7): Separate idempotency check from cooldown check
-		// Idempotency: Check if THIS requestId was already processed
-		Long lastRequestId = lastBulkRequestId.get(playerId);
-		if (lastRequestId != null && lastRequestId.equals(requestId)) {
-			FocusTimerShop.LOGGER.warn("PHASE3_CHEST: Player {} attempted duplicate bulk request {}", 
+		// DEEP AUDIT FIX: Use Set-based idempotency (prevents A→B→A attack)
+		// Check if THIS requestId was already processed
+		Set<Long> processedIds = processedBulkRequestIds.computeIfAbsent(playerId, 
+			k -> java.util.concurrent.ConcurrentHashMap.newKeySet());
+		
+		if (processedIds.contains(requestId)) {
+			FocusTimerShop.LOGGER.warn("DEEP_AUDIT: Player {} attempted duplicate bulk request {} (detected via Set)", 
 				player.getName().getString(), requestId);
 			return; // Duplicate request - ignore
 		}
+		
+		// Add to processed set with size limit (prevent memory leak)
+		if (processedIds.size() >= MAX_TRACKED_REQUESTS) {
+			// Remove oldest half (approximate - just clear and re-add current)
+			FocusTimerShop.LOGGER.debug("DEEP_AUDIT: Cleared old request IDs for {} (limit reached)", 
+				player.getName().getString());
+			processedIds.clear();
+		}
+		processedIds.add(requestId);
 		
 		// Cooldown: Check if player is spamming (separate from idempotency)
 		Long lastTimestamp = lastBulkTimestamp.get(playerId);
@@ -280,8 +293,7 @@ public class LuckyChestManager {
 			return;
 		}
 		
-		// PHASE 3 FIX (BUG #8): Record idempotency BEFORE payment (prevent race condition)
-		lastBulkRequestId.put(playerId, requestId);
+		// DEEP AUDIT: Record timestamp for cooldown tracking
 		lastBulkTimestamp.put(playerId, System.currentTimeMillis());
 		
 		// PHASE 3 FIX (BUG #9): Atomic payment with rollback
@@ -293,8 +305,8 @@ public class LuckyChestManager {
 			silverDeducted = economy.removeSilverCoins(chosenOption.getSilverCoins());
 			if (!silverDeducted) {
 				player.sendMessage(Text.literal("§cKhông đủ Silver Coins!"), false);
-				// Remove idempotency record (payment failed, allow retry)
-				lastBulkRequestId.remove(playerId);
+				// DEEP AUDIT: Remove from processed set (payment failed, allow retry)
+				processedIds.remove(requestId);
 				return;
 			}
 		}
@@ -310,8 +322,8 @@ public class LuckyChestManager {
 						chosenOption.getSilverCoins(), player.getName().getString());
 				}
 				player.sendMessage(Text.literal("§cKhông đủ Gold Coins!"), false);
-				// Remove idempotency record (payment failed, allow retry)
-				lastBulkRequestId.remove(playerId);
+				// DEEP AUDIT: Remove from processed set (payment failed, allow retry)
+				processedIds.remove(requestId);
 				return;
 			}
 		}
@@ -446,7 +458,7 @@ public class LuckyChestManager {
 	}
 	
 	/**
-	 * PHASE 3 FIX (BUG #13): Periodic cleanup of old idempotency records
+	 * DEEP AUDIT FIX: Periodic cleanup of old idempotency records
 	 * Called periodically (e.g., every minute) to prevent memory leak
 	 * Removes entries older than 5 minutes
 	 */
@@ -454,10 +466,10 @@ public class LuckyChestManager {
 		long now = System.currentTimeMillis();
 		final int[] removedCount = {0}; // Use array for lambda mutability
 		
-		// Cleanup idempotency map
-		lastBulkRequestId.entrySet().removeIf(entry -> {
-			// Check if timestamp map has entry
-			Long timestamp = lastBulkTimestamp.get(entry.getKey());
+		// Cleanup processed request IDs (remove players with old timestamps)
+		processedBulkRequestIds.entrySet().removeIf(entry -> {
+			UUID playerId = entry.getKey();
+			Long timestamp = lastBulkTimestamp.get(playerId);
 			if (timestamp != null && (now - timestamp) > IDEMPOTENCY_CLEANUP_AGE_MS) {
 				removedCount[0]++;
 				return true;
@@ -471,7 +483,7 @@ public class LuckyChestManager {
 		);
 		
 		if (removedCount[0] > 0) {
-			FocusTimerShop.LOGGER.debug("PHASE3_CHEST: Cleaned up {} old bulk request records", removedCount[0]);
+			FocusTimerShop.LOGGER.debug("DEEP_AUDIT: Cleaned up {} old bulk request records", removedCount[0]);
 		}
 	}
 }

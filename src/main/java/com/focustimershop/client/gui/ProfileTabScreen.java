@@ -60,9 +60,9 @@ public class ProfileTabScreen {
 			return;
 		}
 		
-		// Get profile data from cache
-		long totalXp = com.focustimershop.client.ClientProfileCache.getTotalFocusXpEarned();
-		RankTier rank = com.focustimershop.profile.RankManager.resolveRank(totalXp);
+		// Get profile data from cache (v1.0.6-beta Season System - use seasonRankXp)
+		long seasonXp = com.focustimershop.client.ClientProfileCache.getSeasonRankXp();
+		RankTier rank = com.focustimershop.profile.RankManager.resolveRank(seasonXp);
 		
 		int contentX = x + 10;
 		int contentY = y + 10;
@@ -285,6 +285,12 @@ public class ProfileTabScreen {
 		// Rank name (large)
 		String rankDisplay = "–  " + rank.getDisplayName().toUpperCase();
 		context.drawText(parent.getTextRenderer(), "§l§b" + rankDisplay, x + 10, y + 8, 0xFF4A9EFF, false);
+		
+		// Season number display (v1.0.6-beta Season System)
+		int currentSeason = com.focustimershop.client.ClientProfileCache.getCurrentSeasonNumber();
+		String seasonText = String.format("§6§lSS%d", currentSeason);
+		int rankDisplayWidth = parent.getTextRenderer().getWidth(rankDisplay);
+		context.drawText(parent.getTextRenderer(), seasonText, x + 20 + rankDisplayWidth, y + 8, 0xFFFFD700, false);
 		
 		// XP display (right side)
 		long xpInto = rank.getXpIntoLevel();

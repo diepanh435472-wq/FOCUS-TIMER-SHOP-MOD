@@ -100,4 +100,62 @@ public class AchievementSystemManager {
 		
 		return grouped;
 	}
+	
+	/**
+	 * v1.0.7-beta - Check achievements from JSON and unlock any newly completed
+	 * Call this after timer session completion
+	 */
+	public static void checkAndUnlockAchievements(net.minecraft.server.network.ServerPlayerEntity player) {
+		if (!initialized) {
+			initialize();
+		}
+		
+		if (allAchievements.isEmpty()) {
+			return;
+		}
+		
+		var profile = com.focustimershop.profile.ProfileManager.getProfile(player.getUuid());
+		var stats = DatabaseManager.getPlayerStats(player.getUuid());
+		
+		// Get unlocked achievement IDs
+		List<String> unlockedIds = profile.getUnlockedTitles(); // Reusing this list for achievement IDs
+		if (unlockedIds == null) {
+			unlockedIds = new ArrayList<>();
+			profile.setUnlockedTitles(unlockedIds);
+		}
+		
+		// Check each achievement
+		for (AchievementDefinition achievement : allAchievements) {
+			// Skip if already unlocked
+			if (unlockedIds.contains(achievement.getId())) {
+				continue;
+			}
+			
+			// Check condition
+			if (achievement.checkCondition(stats)) {
+				// Unlock!
+				unlockedIds.add(achievement.getId());
+				
+				// Feedback
+				player.sendMessage(
+					net.minecraft.text.Text.literal("§e🏆 Thành tựu mới: §f" + achievement.getName()),
+					false
+				);
+				
+				// Play sound
+				player.playSound(
+					net.minecraft.sound.SoundEvents.UI_TOAST_CHALLENGE_COMPLETE,
+					net.minecraft.sound.SoundCategory.PLAYERS,
+					1.0f, 1.0f
+				);
+				
+				// Log
+				FocusTimerShop.LOGGER.info("Player {} unlocked achievement: {} ({})",
+					player.getName().getString(), achievement.getName(), achievement.getId());
+			}
+		}
+		
+		// Save profile if any new achievements
+		com.focustimershop.profile.ProfileManager.saveProfile(profile);
+	}
 }

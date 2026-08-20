@@ -77,6 +77,15 @@ public class DatabaseManager {
 			FocusTimerShop.LOGGER.info("Generated default economy_config.json");
 		}
 		
+		// Bulk Order config (v1.0.6-beta)
+		File bulkOrderConfig = CONFIG_DIR.resolve("bulk_order_config.json").toFile();
+		if (!bulkOrderConfig.exists()) {
+			com.focustimershop.bulkorder.BulkOrderConfig defaultBulkConfig = 
+				com.focustimershop.bulkorder.BulkOrderConfig.createDefault();
+			writeJson(bulkOrderConfig, defaultBulkConfig);
+			FocusTimerShop.LOGGER.info("Generated default bulk_order_config.json");
+		}
+		
 		// Building blocks prices - FORCE REGENERATE if version mismatch
 		File buildingPrices = PRICES_DIR.resolve("building_blocks.json").toFile();
 		boolean needRegenerateBuilding = !buildingPrices.exists();
@@ -292,6 +301,7 @@ public class DatabaseManager {
 	public static Path getStatsDir() { return STATS_DIR; }
 	public static Path getRentalsDir() { return RENTALS_DIR; }
 	public static Path getRoot() { return FCTMS_ROOT; }
+	public static Path getFCTMSRoot() { return FCTMS_ROOT; } // Alias for season system
 	
 	/**
 	 * Get player stats data
@@ -303,6 +313,9 @@ public class DatabaseManager {
 		if (data == null) {
 			data = new PlayerStatsData(playerId);
 		}
+		
+		// v1.0.6-beta Season System - Initialize seasonal XP for existing players
+		data.initializeSeasonalXpIfNeeded();
 		
 		return data;
 	}
@@ -318,4 +331,28 @@ public class DatabaseManager {
 		File file = STATS_DIR.resolve(stats.getPlayerUuid() + "_stats.json").toFile();
 		writeJson(file, stats);
 	}
+	
+	/**
+	 * Load bulk order configuration (v1.0.6-beta)
+	 * Returns default config if file doesn't exist or fails to load
+	 */
+	public static com.focustimershop.bulkorder.BulkOrderConfig loadBulkOrderConfig() {
+		File configFile = CONFIG_DIR.resolve("bulk_order_config.json").toFile();
+		
+		if (!configFile.exists()) {
+			FocusTimerShop.LOGGER.warn("bulk_order_config.json not found, using defaults");
+			return com.focustimershop.bulkorder.BulkOrderConfig.createDefault();
+		}
+		
+		com.focustimershop.bulkorder.BulkOrderConfig config = 
+			readJson(configFile, com.focustimershop.bulkorder.BulkOrderConfig.class);
+		
+		if (config == null) {
+			FocusTimerShop.LOGGER.error("Failed to load bulk_order_config.json, using defaults");
+			return com.focustimershop.bulkorder.BulkOrderConfig.createDefault();
+		}
+		
+		return config;
+	}
 }
+

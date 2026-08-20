@@ -157,7 +157,8 @@ public class AchievementManager {
 	public static void checkAchievements(ServerPlayerEntity player) {
 		var profile = com.focustimershop.profile.ProfileManager.getProfile(player.getUuid());
 		var stats = DatabaseManager.getPlayerStats(player.getUuid());
-		var rank = com.focustimershop.profile.RankManager.resolveRank(stats.getTotalXpEarned());
+		// v1.0.6-beta Season System - Use seasonRankXp for rank display
+		var rank = com.focustimershop.profile.RankManager.resolveRank(stats.getSeasonRankXp());
 		
 		// Get unlocked IDs
 		List<String> unlockedIds = profile.getUnlockedTitles(); // Reusing this list for achievement IDs

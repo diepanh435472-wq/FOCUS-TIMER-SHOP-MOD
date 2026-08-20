@@ -19,6 +19,10 @@ public class TimerSession {
 	private TimerType type;
 	private TimerState state;
 	
+	// v1.0.7-beta Timer UI Overhaul - New category + mode system
+	private SessionCategory category;
+	private ClockMode clockMode;
+	
 	// Time tracking (in seconds)
 	private int targetTime;      // For countdown/pomodoro (0 = no target for stopwatch)
 	private int elapsedTime;     // Current elapsed time
@@ -29,7 +33,12 @@ public class TimerSession {
 	
 	// Stopwatch lap times
 	private List<Integer> lapTimes;
+	
+	// v1.0.7-beta - Encouragement note and to-do list
+	private String encouragementNote;
+	private List<String> todoList;
 
+	// Old constructor for backwards compatibility
 	public TimerSession(UUID playerId, TimerType type, int targetTimeSeconds) {
 		this.playerId = playerId;
 		this.type = type;
@@ -39,6 +48,81 @@ public class TimerSession {
 		this.lastTickTime = 0;
 		this.pomodoroRounds = 0;
 		this.lapTimes = new ArrayList<>();
+		this.todoList = new ArrayList<>();
+		
+		// Map old TimerType to new category/mode for backwards compatibility
+		mapLegacyTypeToNewSystem();
+	}
+	
+	// v1.0.7-beta - New constructor using category + clock mode
+	public TimerSession(UUID playerId, SessionCategory category, ClockMode clockMode, 
+	                    int targetTimeSeconds, String encouragementNote, List<String> todoList) {
+		this.playerId = playerId;
+		this.category = category;
+		this.clockMode = clockMode;
+		this.state = TimerState.IDLE;
+		this.targetTime = targetTimeSeconds;
+		this.elapsedTime = 0;
+		this.lastTickTime = 0;
+		this.pomodoroRounds = 0;
+		this.lapTimes = new ArrayList<>();
+		this.encouragementNote = encouragementNote;
+		this.todoList = todoList != null ? new ArrayList<>(todoList) : new ArrayList<>();
+		
+		// Set legacy TimerType based on category + mode
+		this.type = mapNewSystemToLegacyType(category, clockMode);
+	}
+	
+	/**
+	 * v1.0.7-beta - Map legacy TimerType to new category/mode system
+	 */
+	private void mapLegacyTypeToNewSystem() {
+		switch (type) {
+			case POMODORO_FOCUS:
+				this.category = SessionCategory.TAP_TRUNG;
+				this.clockMode = ClockMode.COUNTDOWN;
+				break;
+			case POMODORO_SHORT_BREAK:
+				this.category = SessionCategory.NGHI_NGAN;
+				this.clockMode = ClockMode.COUNTDOWN;
+				break;
+			case POMODORO_LONG_BREAK:
+				this.category = SessionCategory.NGHI_DAI;
+				this.clockMode = ClockMode.COUNTDOWN;
+				break;
+			case STOPWATCH:
+				this.category = SessionCategory.TAP_TRUNG; // Default to focus
+				this.clockMode = ClockMode.STOPWATCH;
+				break;
+			case COUNTDOWN:
+				this.category = SessionCategory.TAP_TRUNG; // Default to focus
+				this.clockMode = ClockMode.COUNTDOWN;
+				break;
+		}
+	}
+	
+	/**
+	 * v1.0.7-beta - Map new category/mode system to legacy TimerType
+	 * Used for maintaining compatibility with existing systems
+	 */
+	private TimerType mapNewSystemToLegacyType(SessionCategory category, ClockMode clockMode) {
+		if (clockMode == ClockMode.STOPWATCH) {
+			return TimerType.STOPWATCH;
+		}
+		
+		// Countdown mode
+		switch (category) {
+			case TAP_TRUNG:
+				return TimerType.POMODORO_FOCUS;
+			case NGHI_NGAN:
+				return TimerType.POMODORO_SHORT_BREAK;
+			case NGHI_DAI:
+				return TimerType.POMODORO_LONG_BREAK;
+			case TAP_LUYEN:
+				return TimerType.COUNTDOWN; // Exercise maps to generic countdown
+			default:
+				return TimerType.COUNTDOWN;
+		}
 	}
 
 	public void start() {
@@ -228,5 +312,74 @@ public class TimerSession {
 		this.state = TimerState.IDLE;
 		this.elapsedTime = 0;
 		this.lastTickTime = 0;
+	}
+	
+	// v1.0.7-beta - Getters/setters for new fields
+	public SessionCategory getCategory() {
+		return category;
+	}
+	
+	public void setCategory(SessionCategory category) {
+		this.category = category;
+	}
+	
+	public ClockMode getClockMode() {
+		return clockMode;
+	}
+	
+	public void setClockMode(ClockMode clockMode) {
+		this.clockMode = clockMode;
+	}
+	
+	public String getEncouragementNote() {
+		return encouragementNote;
+	}
+	
+	public void setEncouragementNote(String encouragementNote) {
+		this.encouragementNote = encouragementNote;
+	}
+	
+	public List<String> getTodoList() {
+		return todoList != null ? new ArrayList<>(todoList) : new ArrayList<>();
+	}
+	
+	public void setTodoList(List<String> todoList) {
+		this.todoList = todoList != null ? new ArrayList<>(todoList) : new ArrayList<>();
+	}
+	
+	/**
+	 * v1.0.7-beta - Get legacy type name for achievement tracking
+	 * Maps category + mode to old achievement type names per spec §1:
+	 * - "Pomodoro" = TAP_TRUNG + COUNTDOWN
+	 * - "Stopwatch" = Any category + STOPWATCH (Bấm giờ mode)
+	 * - "Countdown" = (NGHI_NGAN | NGHI_DAI | TAP_LUYEN) + COUNTDOWN (excluding TAP_TRUNG to avoid double-trigger)
+	 */
+	public String getLegacyTypeNameForAchievements() {
+		// New system: use category + mode
+		if (category != null && clockMode != null) {
+			if (clockMode == ClockMode.STOPWATCH) {
+				return "Stopwatch"; // Any category with Stopwatch mode
+			}
+			
+			// Countdown mode
+			if (category == SessionCategory.TAP_TRUNG) {
+				return "Pomodoro"; // Focus + Countdown = old Pomodoro
+			} else {
+				return "Countdown"; // Other categories + Countdown = old generic Countdown
+			}
+		}
+		
+		// Fallback: map legacy TimerType to achievement name
+		switch (type) {
+			case POMODORO_FOCUS:
+			case POMODORO_SHORT_BREAK:
+			case POMODORO_LONG_BREAK:
+				return "Pomodoro";
+			case STOPWATCH:
+				return "Stopwatch";
+			case COUNTDOWN:
+			default:
+				return "Countdown";
+		}
 	}
 }

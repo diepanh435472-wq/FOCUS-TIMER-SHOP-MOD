@@ -21,13 +21,17 @@ public class RankMapScreen extends Screen {
 	private int scrollOffset = 0;
 	private RankTier currentRank;
 	
+	// Track content height for proper scroll clamping (fix infinite scroll bug)
+	private int contentHeight = 0;
+	private int viewportHeight = 0;
+	
 	public RankMapScreen(Screen parent) {
 		super(Text.literal("Sơ Đồ Rank"));
 		this.parent = parent;
 		
-		// Get current rank
-		long totalXp = ClientProfileCache.getTotalFocusXpEarned();
-		this.currentRank = RankManager.resolveRank(totalXp);
+		// Get current rank (v1.0.6-beta Season System - use seasonRankXp)
+		long seasonXp = ClientProfileCache.getSeasonRankXp();
+		this.currentRank = RankManager.resolveRank(seasonXp);
 	}
 	
 	@Override
@@ -72,15 +76,22 @@ public class RankMapScreen extends Screen {
 	
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-		// Background
-		renderBackgroundTexture(context);
+		// FIX: Use dark flat background consistent with mod's UI theme
+		// Instead of renderBackgroundTexture() which uses dirt/terrain texture
+		context.fill(0, 0, width, height, 0xFF0A0A0A); // Very dark background
+		context.fill(0, 0, width, height, 0x80000000); // Semi-transparent overlay
 		
 		// Title
 		context.drawCenteredTextWithShadow(textRenderer, "§6§lSƠ ĐỒ RANK", 
 			width / 2, 20, 0xFFFFD700);
 		
+		// Calculate viewport dimensions for scroll clamping
+		viewportHeight = height - 100; // Space between title and buttons
+		int contentStartY = 50;
+		
 		// Render rank map (scrollable)
-		int contentY = 50 - scrollOffset;
+		int contentY = contentStartY - scrollOffset;
+		int contentYStart = contentY; // Track where content rendering starts
 		int contentX = width / 2 - 200;
 		int contentWidth = 400;
 		
@@ -109,6 +120,9 @@ public class RankMapScreen extends Screen {
 		
 		// Render buttons
 		super.render(context, mouseX, mouseY, delta);
+		
+		// Calculate total content height for scroll clamping
+		contentHeight = contentY - contentYStart;
 		
 		// Scroll hint
 		context.drawCenteredTextWithShadow(textRenderer, "§7Cuộn chuột để xem thêm", 
@@ -223,7 +237,12 @@ public class RankMapScreen extends Screen {
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
 		scrollOffset -= (int)(amount * 30);
-		if (scrollOffset < 0) scrollOffset = 0;
+		
+		// FIX: Clamp scroll to actual content bounds (prevent infinite scroll)
+		// Same pattern as Lucky Chest and Profile fixes
+		int maxScroll = Math.max(0, contentHeight - viewportHeight);
+		scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+		
 		return true;
 	}
 	

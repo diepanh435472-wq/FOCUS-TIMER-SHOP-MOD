@@ -41,6 +41,12 @@ public class FocusTimerShop implements ModInitializer {
 		
 		// Register area mining handler for rental tools
 		com.focustimershop.rental.AreaMiningHandler.register();
+		
+		// Initialize bulk order system (v1.0.6-beta)
+		com.focustimershop.bulkorder.BulkOrderManager.initialize();
+		
+		// Initialize season system (v1.0.6-beta)
+		com.focustimershop.season.SeasonManager.initialize();
 
 		// Initialize networking
 		ModNetworking.registerServerPackets();

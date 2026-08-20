@@ -8,7 +8,9 @@ public class ClientProfileCache {
 	
 	private static String inGameName = "";
 	private static String customName = "";
-	private static long totalFocusXpEarned = 0;
+	private static long totalFocusXpEarned = 0; // Lifetime XP (never decays)
+	private static long seasonRankXp = 0; // v1.0.6-beta Season System - Seasonal XP (decays monthly)
+	private static int currentSeasonNumber = 1; // v1.0.6-beta Season number
 	private static int currentStreakDays = 0;
 	private static int longestStreakDays = 0;
 	private static int longestSingleSessionSeconds = 0;
@@ -28,15 +30,17 @@ public class ClientProfileCache {
 	private static java.util.Map<String, Long> unlockedTitlesMap = new java.util.HashMap<>();
 	
 	/**
-	 * Update profile from server sync (Phase 0 - long)
+	 * Update profile from server sync (v1.0.6-beta Season System)
 	 */
-	public static void updateProfile(String inGameName, String customName, long totalXp,
+	public static void updateProfile(String inGameName, String customName, long totalXp, long seasonXp, int seasonNum,
 	                                  int currentStreak, int longestStreak, int longestSession,
 	                                  long totalSessions, long totalFocusTime, String favoriteTimer,
 	                                  long profileCreated) {
 		ClientProfileCache.inGameName = inGameName;
 		ClientProfileCache.customName = customName;
-		ClientProfileCache.totalFocusXpEarned = totalXp;
+		ClientProfileCache.totalFocusXpEarned = totalXp; // Lifetime
+		ClientProfileCache.seasonRankXp = seasonXp; // v1.0.6-beta Season
+		ClientProfileCache.currentSeasonNumber = seasonNum; // v1.0.6-beta Season
 		ClientProfileCache.currentStreakDays = currentStreak;
 		ClientProfileCache.longestStreakDays = longestStreak;
 		ClientProfileCache.longestSingleSessionSeconds = longestSession;
@@ -49,7 +53,9 @@ public class ClientProfileCache {
 	// Getters
 	public static String getInGameName() { return inGameName; }
 	public static String getCustomName() { return customName; }
-	public static long getTotalFocusXpEarned() { return totalFocusXpEarned; }
+	public static long getTotalFocusXpEarned() { return totalFocusXpEarned; } // Lifetime
+	public static long getSeasonRankXp() { return seasonRankXp; } // v1.0.6-beta Season
+	public static int getCurrentSeasonNumber() { return currentSeasonNumber; } // v1.0.6-beta Season
 	public static int getCurrentStreakDays() { return currentStreakDays; }
 	public static int getLongestStreakDays() { return longestStreakDays; }
 	public static int getLongestSingleSessionSeconds() { return longestSingleSessionSeconds; }
