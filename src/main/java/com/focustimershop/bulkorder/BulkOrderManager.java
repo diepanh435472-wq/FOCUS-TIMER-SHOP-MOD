@@ -136,27 +136,50 @@ public class BulkOrderManager {
 		
 		paymentSuccess = true;
 		
-		// === FULFILLMENT ===
+		// === FULFILLMENT - DIRECT ITEM SPAWN (NO CHEST) ===
 		
 		if (paymentSuccess) {
-			// Give chests filled with items
-			int chestsGiven = 0;
-			int chestsDropped = 0;
+			// Calculate total items to give
+			long totalItems = config.getTotalItemCount(chestCount);
+			int itemsGiven = 0;
+			int itemsDropped = 0;
 			
-			for (int i = 0; i < chestCount; i++) {
-				ItemStack filledChest = createFilledChest(itemId, shopItem);
-				
-				if (filledChest != null) {
-					boolean addedToInv = tryGiveItemToPlayer(player, filledChest);
-					if (addedToInv) {
-						chestsGiven++;
-					} else {
-						chestsDropped++;
-					}
-				} else {
-					FocusTimerShop.LOGGER.error("BULKORDER: Failed to create chest for {} (item: {})", 
-						player.getName().getString(), itemId);
+			// Get Minecraft item
+			try {
+				net.minecraft.item.Item minecraftItem = Registries.ITEM.get(new Identifier("minecraft", itemId));
+				if (minecraftItem == null || minecraftItem == Items.AIR) {
+					// Rollback payment
+					economy.addSilverCoins(silverCost);
+					economy.addGoldCoins(goldCost);
+					player.sendMessage(Text.literal("§cLỗi: Item không tồn tại!"), false);
+					return;
 				}
+				
+				int maxStackSize = minecraftItem.getMaxCount();
+				long remaining = totalItems;
+				
+				// Give items in stacks
+				while (remaining > 0) {
+					int stackSize = (int) Math.min(remaining, maxStackSize);
+					ItemStack stack = new ItemStack(minecraftItem, stackSize);
+					
+					boolean addedToInv = tryGiveItemToPlayer(player, stack);
+					if (addedToInv) {
+						itemsGiven += stackSize;
+					} else {
+						itemsDropped += stackSize;
+					}
+					
+					remaining -= stackSize;
+				}
+				
+			} catch (Exception e) {
+				FocusTimerShop.LOGGER.error("BULKORDER: Failed to spawn items: {}", e.getMessage());
+				// Rollback payment
+				economy.addSilverCoins(silverCost);
+				economy.addGoldCoins(goldCost);
+				player.sendMessage(Text.literal("§cLỗi: Không thể tạo items!"), false);
+				return;
 			}
 			
 			// Save and sync economy
@@ -166,7 +189,6 @@ public class BulkOrderManager {
 			// === STATS TRACKING ===
 			
 			PlayerStatsData stats = DatabaseManager.getPlayerStats(player.getUuid());
-			long totalItems = config.getTotalItemCount(chestCount);
 			stats.setTotalItemsPurchased(stats.getTotalItemsPurchased() + totalItems);
 			
 			// Activity log
@@ -187,25 +209,25 @@ public class BulkOrderManager {
 			
 			// === CONFIRMATION MESSAGE ===
 			
-			player.sendMessage(Text.literal("§a✓ Đã mua " + chestCount + " rương " + 
-				shopItem.getDisplayName() + "!"), false);
+			player.sendMessage(Text.literal(String.format("§a✓ Đã mua %d x %s! (tương đương %d rương)", 
+				totalItems, shopItem.getDisplayName(), chestCount)), false);
 			
-			if (chestsDropped > 0) {
-				player.sendMessage(Text.literal("§e⚠ " + chestsDropped + " rương rơi xuống đất (inv đầy)"), false);
+			if (itemsDropped > 0) {
+				player.sendMessage(Text.literal("§e⚠ " + itemsDropped + " items rơi xuống đất (inv đầy)"), false);
 			}
 			
 			// === LOGGING ===
 			
-			FocusTimerShop.LOGGER.info("BULKORDER: {} purchased {} chests of {} ({} items total) for {} " +
+			FocusTimerShop.LOGGER.info("BULKORDER: {} purchased {} x {} ({} chests equivalent) for {} " +
 				"({}% discount, given:{}, dropped:{})",
 				player.getName().getString(), 
-				chestCount, 
-				itemId, 
 				totalItems,
+				itemId, 
+				chestCount, 
 				costDisplay,
 				String.format("%.1f", discount),
-				chestsGiven,
-				chestsDropped
+				itemsGiven,
+				itemsDropped
 			);
 		}
 	}

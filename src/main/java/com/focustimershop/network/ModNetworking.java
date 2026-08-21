@@ -535,10 +535,21 @@ public class ModNetworking {
 				
 				client.execute(() -> {
 					ClientDataCache.updateTimerState(type, state, elapsed, target, pomodoroRounds);
+					
+					// v1.0.7-beta: Auto-open ActiveSessionScreen if timer is running
+					if (state == TimerState.RUNNING && client.currentScreen == null) {
+						client.setScreen(new com.focustimershop.client.gui.ActiveSessionScreen());
+						FocusTimerShop.LOGGER.info("[CLIENT] Opened ActiveSessionScreen (timer restored)");
+					}
 				});
 			} else {
 				client.execute(() -> {
 					ClientDataCache.clearTimerState();
+					
+					// Close ActiveSessionScreen if it's open
+					if (client.currentScreen instanceof com.focustimershop.client.gui.ActiveSessionScreen) {
+						client.setScreen(null);
+					}
 				});
 			}
 		});

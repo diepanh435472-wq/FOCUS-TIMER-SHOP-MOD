@@ -613,39 +613,8 @@ public class ShopTabScreen {
 			gridDragStartY = mouseY;
 			gridDragStartOffset = scrollOffset;
 			
-			// Continue to check for item clicks below (will be processed in mouseReleased if drag < threshold)
-		}
-		
-		List<ShopItem> items = getFilteredItems();
-		
-		// ===== FIX: USE SHARED GRID GEOMETRY =====
-		// MUST use getGridColumns() to match render geometry exactly
-		int columns = getGridColumns(contentWidth);
-		// =========================================
-		
-		int visibleRows = gridHeight / GRID_CELL_SIZE;
-		int startIndex = scrollOffset * columns;
-		int endIndex = Math.min(startIndex + visibleRows * columns, items.size());
-		
-		for (int i = startIndex; i < endIndex; i++) {
-			ShopItem item = items.get(i);
-			int index = i - startIndex;
-			int col = index % columns;
-			int row = index / columns;
-			
-			int cellX = contentX + 5 + col * GRID_CELL_SIZE;  // Match render: x + 5
-			int cellY = gridY + row * GRID_CELL_SIZE;
-			
-			if (mouseX >= cellX && mouseX <= cellX + GRID_ICON_SIZE &&
-			    mouseY >= cellY && mouseY <= cellY + GRID_ICON_SIZE) {
-				// FIX: Add click cooldown to prevent double-click
-				long currentTime = System.currentTimeMillis();
-				if (currentTime - lastClickTime >= CLICK_COOLDOWN_MS) {
-					cart.addItem(item.getItemId(), 1);
-					lastClickTime = currentTime;
-				}
-				return true;
-			}
+			// DON'T add items here - wait for mouseReleased to check if it's a drag or click
+			return true;
 		}
 		
 		// Check cart item buttons (decrease/remove) - match render coordinates

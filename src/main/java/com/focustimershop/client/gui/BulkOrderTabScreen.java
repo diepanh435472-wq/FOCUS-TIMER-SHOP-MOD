@@ -49,6 +49,7 @@ public class BulkOrderTabScreen {
 	private int tabScrollOffset = 0;
 	private boolean isDraggingTabs = false;
 	private double dragStartX = 0;
+	private double dragStartY = 0; // Track Y position to know where drag started
 	private int dragStartOffset = 0;
 	private static final int TAB_DRAG_THRESHOLD = 5;
 	
@@ -57,6 +58,13 @@ public class BulkOrderTabScreen {
 	private double gridDragStartY = 0;
 	private int gridDragStartOffset = 0;
 	private static final int GRID_DRAG_THRESHOLD = 3;
+	
+	// === BUTTON POSITIONS (cached for click detection) ===
+	private int cachedSilverButtonY = 0;
+	private int cachedMixedButtonX = 0;
+	private int cachedBuyButtonY = 0;
+	private int cachedRightPanelX = 0;
+	private int cachedRightPanelWidth = 0;
 	
 	// === GRID GEOMETRY ===
 	private static final int GRID_ICON_SIZE = 32;
@@ -145,12 +153,22 @@ public class BulkOrderTabScreen {
 		int maxScroll = Math.max(0, totalWidth - width);
 		tabScrollOffset = Math.max(0, Math.min(tabScrollOffset, maxScroll));
 		
+		// Clip rendering to tab area to prevent overflow
+		int clipX = x;
+		int clipY = y;
+		int clipWidth = width;
+		int clipHeight = height;
+		
+		// Enable scissor test for clipping
+		context.enableScissor(clipX, clipY, clipX + clipWidth, clipY + clipHeight);
+		
 		int currentX = x - tabScrollOffset;
 		for (ShopCategory cat : categories) {
 			if (currentX + tabWidth >= x && currentX <= x + width) {
 				boolean selected = (cat == selectedCategory);
 				boolean hovered = mouseX >= currentX && mouseX <= currentX + tabWidth &&
-				                  mouseY >= y && mouseY <= y + height;
+				                  mouseY >= y && mouseY <= y + height &&
+				                  mouseX >= x && mouseX <= x + width; // Also check within clip bounds
 				
 				int bgColor = selected ? 0xFF4A9EFF : (hovered ? 0xFF3A4A5A : 0xFF2A2A2A);
 				context.fill(currentX, y, currentX + tabWidth, y + height, bgColor);
@@ -163,6 +181,9 @@ public class BulkOrderTabScreen {
 			}
 			currentX += tabWidth + 2;
 		}
+		
+		// Disable scissor test
+		context.disableScissor();
 	}
 	
 	private void renderItemGrid(DrawContext context, int x, int y, int width, int height, int mouseX, int mouseY) {
@@ -221,6 +242,10 @@ public class BulkOrderTabScreen {
 	}
 	
 	private void renderRightPanel(DrawContext context, int x, int y, int width, int height, int mouseX, int mouseY) {
+		// Cache for click detection
+		cachedRightPanelX = x;
+		cachedRightPanelWidth = width;
+		
 		// Background
 		context.fill(x - 5, y, x + width + 5, y + height, 0xFF1A1A1A);
 		context.fill(x, y + 5, x + width, y + height - 5, 0xFF2A2A2A);
@@ -319,6 +344,9 @@ public class BulkOrderTabScreen {
 			context.drawText(parent.getTextRenderer(), "§7Thanh toán:", x + 10, currentY, 0xFFFFFFFF, false);
 			currentY += 12;
 			
+			// CACHE BUTTON POSITION
+			cachedSilverButtonY = currentY;
+			
 			// Silver-only button
 			int silverButtonY = currentY;
 			boolean silverHovered = mouseX >= x + 10 && mouseX <= x + width / 2 - 5 &&
@@ -336,6 +364,8 @@ public class BulkOrderTabScreen {
 			
 			// Mixed button
 			int mixedButtonX = x + width / 2;
+			cachedMixedButtonX = mixedButtonX;
+			
 			boolean mixedHovered = mouseX >= mixedButtonX && mouseX <= x + width - 10 &&
 			                       mouseY >= silverButtonY && mouseY <= silverButtonY + 20;
 			int mixedBg = !useSilverOnly ? 0xFF4A9EFF : (mixedHovered ? 0xFF3A4A5A : 0xFF2A2A2A);
@@ -366,6 +396,8 @@ public class BulkOrderTabScreen {
 			
 			// === BUY BUTTON ===
 			int buttonY = currentY;
+			cachedBuyButtonY = buttonY;
+			
 			int buttonHeight = 30;
 			boolean buttonHovered = mouseX >= x + 10 && mouseX <= x + width - 10 &&
 			                        mouseY >= buttonY && mouseY <= buttonY + buttonHeight;
@@ -446,67 +478,55 @@ public class BulkOrderTabScreen {
 			return false;
 		}
 		
-		// Category tabs
+		// === CATEGORY TABS ===
 		int leftWidth = getLeftPanelWidth(contentWidth);
 		int tabY = contentY + 45;
 		if (mouseY >= tabY && mouseY <= tabY + 30 && mouseX >= contentX + 5 && mouseX <= contentX + leftWidth - 5) {
-			ShopCategory[] categories = ShopCategory.values();
-			int tabWidth = 80;
-			int currentX = contentX + 5 - tabScrollOffset;
+			// Start drag detection for tabs - DON'T select tab yet, wait for mouseReleased
+			isDraggingTabs = false;  // Will be set to true in mouseDragged if threshold exceeded
+			dragStartX = mouseX;
+			dragStartY = mouseY; // Store Y to detect if started in tab area
+			dragStartOffset = tabScrollOffset;
 			
-			for (ShopCategory cat : categories) {
-				if (mouseX >= currentX && mouseX <= currentX + tabWidth) {
-					selectedCategory = cat;
-					scrollOffset = 0;
-					lastClickTime = currentTime;
-					return true;
-				}
-				currentX += tabWidth + 2;
-			}
+			// Reset grid drag state (not in grid area)
+			gridDragStartY = -1;
+			
+			return true; // Consume event (will process in mouseReleased if not dragged)
 		}
 		
-		// Item grid clicks
+		// === ITEM GRID ===
 		int gridY = contentY + 85;
 		int gridHeight = contentHeight - 90;
 		if (mouseX >= contentX + 5 && mouseX <= contentX + leftWidth - 5 &&
 		    mouseY >= gridY && mouseY <= gridY + gridHeight) {
 			
-			List<ShopItem> items = getFilteredItems();
-			int columns = getGridColumns(contentWidth);
-			int startIndex = scrollOffset * columns;
-			int endIndex = Math.min(startIndex + (gridHeight / GRID_CELL_SIZE) * columns, items.size());
+			// Start grid drag detection - DON'T SELECT ITEM YET
+			isDraggingGrid = false;
+			gridDragStartY = mouseY;
+			gridDragStartOffset = scrollOffset;
 			
-			for (int i = startIndex; i < endIndex; i++) {
-				ShopItem item = items.get(i);
-				int index = i - startIndex;
-				int col = index % columns;
-				int row = index / columns;
-				
-				int cellX = contentX + 5 + col * GRID_CELL_SIZE;
-				int cellY = gridY + row * GRID_CELL_SIZE;
-				
-				if (mouseX >= cellX && mouseX <= cellX + GRID_ICON_SIZE &&
-				    mouseY >= cellY && mouseY <= cellY + GRID_ICON_SIZE) {
-					selectedItem = item;
-					lastClickTime = currentTime;
-					return true;
-				}
-			}
+			// Reset tab drag state (not in tab area)
+			dragStartY = -1;
+			
+			// Store potential item click for mouseReleased
+			return true; // Consume event (might be starting drag)
 		}
 		
-		// Right panel clicks
-		if (selectedItem != null) {
-			int rightWidth = contentWidth - leftWidth - 10;
-			int rightX = contentX + leftWidth + 10;
+		// === RIGHT PANEL BUTTONS ===
+		if (selectedItem != null && cachedSilverButtonY > 0) {
+			int rightX = cachedRightPanelX;
+			int rightWidth = cachedRightPanelWidth;
 			
 			// Payment selector buttons
-			int silverButtonY = contentY + 185; // Approximate position
-			if (mouseY >= silverButtonY && mouseY <= silverButtonY + 20) {
+			if (mouseY >= cachedSilverButtonY && mouseY <= cachedSilverButtonY + 20) {
+				// Silver button
 				if (mouseX >= rightX + 10 && mouseX <= rightX + rightWidth / 2 - 5) {
 					useSilverOnly = true;
 					lastClickTime = currentTime;
 					return true;
-				} else if (mouseX >= rightX + rightWidth / 2 && mouseX <= rightX + rightWidth - 10) {
+				}
+				// Mixed button
+				if (mouseX >= cachedMixedButtonX && mouseX <= rightX + rightWidth - 10) {
 					useSilverOnly = false;
 					lastClickTime = currentTime;
 					return true;
@@ -514,13 +534,16 @@ public class BulkOrderTabScreen {
 			}
 			
 			// Buy button
-			int buttonY = silverButtonY + 60; // Approximate position
 			int buttonHeight = 30;
 			if (mouseX >= rightX + 10 && mouseX <= rightX + rightWidth - 10 &&
-			    mouseY >= buttonY && mouseY <= buttonY + buttonHeight) {
+			    mouseY >= cachedBuyButtonY && mouseY <= cachedBuyButtonY + buttonHeight) {
 				
 				// Check affordability
 				long unitPrice = selectedItem.getSilverPrice();
+				double discount = BulkOrderManager.getConfig().getDiscountForChestCount(chestCount);
+				long totalSilver = unitPrice * BulkOrderManager.getConfig().getItemsPerChest() * chestCount;
+				totalSilver = (long) Math.ceil(totalSilver * (1.0 - discount));
+				
 				long[] displayPrice = BulkOrderManager.calculateDisplayPrice(unitPrice, chestCount, useSilverOnly);
 				long gold = displayPrice[0];
 				long silver = displayPrice[1];
@@ -529,7 +552,7 @@ public class BulkOrderTabScreen {
 				long playerGold = ClientDataCache.getGoldCoins();
 				
 				boolean canAfford = useSilverOnly ? 
-					(playerSilver >= (unitPrice * BulkOrderManager.getConfig().getItemsPerChest() * chestCount)) : 
+					(playerSilver >= totalSilver) : 
 					(playerGold >= gold && playerSilver >= silver);
 				
 				if (canAfford) {
@@ -552,9 +575,153 @@ public class BulkOrderTabScreen {
 		return false;
 	}
 	
-	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-		// Scroll item grid
+	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+		// Grid drag has PRIORITY over tab drag
+		// Check if we started drag in grid area
+		int gridY = lastContentY + 85;
+		int gridHeight = lastContentHeight - 90;
 		int leftWidth = getLeftPanelWidth(lastContentWidth);
+		
+		if (gridDragStartY >= gridY && gridDragStartY <= gridY + gridHeight &&
+		    Math.abs(mouseY - gridDragStartY) > GRID_DRAG_THRESHOLD) {
+			isDraggingGrid = true;
+		}
+		
+		if (isDraggingGrid) {
+			int dragDelta = (int)((gridDragStartY - mouseY) / GRID_CELL_SIZE);
+			scrollOffset = gridDragStartOffset + dragDelta;
+			
+			// Clamp
+			List<ShopItem> items = getFilteredItems();
+			int columns = getGridColumns(lastContentWidth);
+			int visibleRows = gridHeight / GRID_CELL_SIZE;
+			int totalRows = (int) Math.ceil((double) items.size() / columns);
+			int maxScroll = Math.max(0, totalRows - visibleRows);
+			scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+			
+			return true;
+		}
+		
+		// Tab drag (only if not dragging grid)
+		int tabY = lastContentY + 45;
+		if (dragStartY >= tabY && dragStartY <= tabY + 30 &&
+		    Math.abs(mouseX - dragStartX) > TAB_DRAG_THRESHOLD) {
+			isDraggingTabs = true;
+		}
+		
+		if (isDraggingTabs) {
+			int dragDelta = (int)(dragStartX - mouseX);
+			tabScrollOffset = dragStartOffset + dragDelta;
+			
+			// Clamp
+			ShopCategory[] categories = ShopCategory.values();
+			int tabWidth = 80;
+			int totalWidth = categories.length * (tabWidth + 2);
+			int maxScroll = Math.max(0, totalWidth - leftWidth + 10);
+			tabScrollOffset = Math.max(0, Math.min(tabScrollOffset, maxScroll));
+			
+			return true;
+		}
+		
+		return false;
+	}
+	
+	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		// If we were dragging, don't process click
+		boolean wasDraggingTabs = isDraggingTabs;
+		boolean wasDraggingGrid = isDraggingGrid;
+		
+		isDraggingTabs = false;
+		isDraggingGrid = false;
+		
+		if (wasDraggingTabs || wasDraggingGrid) {
+			return true; // Was dragging, don't process as click
+		}
+		
+		// Not dragging - check if it was a tab click
+		long currentTime = System.currentTimeMillis();
+		int tabY = lastContentY + 45;
+		int leftWidth = getLeftPanelWidth(lastContentWidth);
+		
+		if (dragStartY >= tabY && dragStartY <= tabY + 30 &&
+		    mouseX >= lastContentX + 5 && mouseX <= lastContentX + leftWidth - 5 &&
+		    mouseY >= tabY && mouseY <= tabY + 30) {
+			
+			// Process tab click
+			ShopCategory[] categories = ShopCategory.values();
+			int tabWidth = 80;
+			int currentX = lastContentX + 5 - tabScrollOffset;
+			
+			for (ShopCategory cat : categories) {
+				if (mouseX >= currentX && mouseX <= currentX + tabWidth && 
+				    mouseX >= lastContentX + 5 && mouseX <= lastContentX + leftWidth - 5) {
+					selectedCategory = cat;
+					scrollOffset = 0;
+					lastClickTime = currentTime;
+					return true;
+				}
+				currentX += tabWidth + 2;
+			}
+			return true;
+		}
+		
+		// Not dragging - process item selection if in grid
+		int gridY = lastContentY + 85;
+		int gridHeight = lastContentHeight - 90;
+		// Reuse leftWidth from above
+		
+		if (gridDragStartY >= gridY && gridDragStartY <= gridY + gridHeight &&
+		    mouseX >= lastContentX + 5 && mouseX <= lastContentX + leftWidth - 5 &&
+		    mouseY >= gridY && mouseY <= gridY + gridHeight) {
+			
+			// Process item click
+			List<ShopItem> items = getFilteredItems();
+			int columns = getGridColumns(lastContentWidth);
+			int startIndex = scrollOffset * columns;
+			int endIndex = Math.min(startIndex + (gridHeight / GRID_CELL_SIZE) * columns, items.size());
+			
+			for (int i = startIndex; i < endIndex; i++) {
+				ShopItem item = items.get(i);
+				int index = i - startIndex;
+				int col = index % columns;
+				int row = index / columns;
+				
+				int cellX = lastContentX + 5 + col * GRID_CELL_SIZE;
+				int cellY = gridY + row * GRID_CELL_SIZE;
+				
+				if (mouseX >= cellX && mouseX <= cellX + GRID_ICON_SIZE &&
+				    mouseY >= cellY && mouseY <= cellY + GRID_ICON_SIZE) {
+					selectedItem = item;
+					lastClickTime = currentTime;
+					return true;
+				}
+			}
+		}
+		
+		return false;
+	}
+	
+	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+		int leftWidth = getLeftPanelWidth(lastContentWidth);
+		
+		// Scroll category tabs (horizontal scroll with mouse wheel when hovering over tabs)
+		int tabY = lastContentY + 45;
+		if (mouseX >= lastContentX + 5 && mouseX <= lastContentX + leftWidth - 5 &&
+		    mouseY >= tabY && mouseY <= tabY + 30) {
+			
+			tabScrollOffset -= (int)(verticalAmount * 20); // Convert wheel to pixels
+			
+			// Clamp
+			ShopCategory[] categories = ShopCategory.values();
+			int tabWidth = 80;
+			int totalWidth = categories.length * (tabWidth + 2);
+			int maxScroll = Math.max(0, totalWidth - leftWidth + 10);
+			tabScrollOffset = Math.max(0, Math.min(tabScrollOffset, maxScroll));
+			
+			return true;
+		}
+		
+		// Scroll item grid
 		int gridY = lastContentY + 85;
 		int gridHeight = lastContentHeight - 90;
 		

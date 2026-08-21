@@ -7,10 +7,6 @@
 		"EntityDataSaverMixin"
 	],
 	"client": [
-		"ClientPlayerEntityMixin",
-		"ClientPlayerInteractionManagerMixin",
-		"KeyboardInputMixin",
-		"MouseMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

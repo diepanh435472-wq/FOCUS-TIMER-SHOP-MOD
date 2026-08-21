@@ -303,26 +303,34 @@ public class TimerManager {
 	}
 
 	/**
-	 * Handle player disconnect - save their timer
-	 * PHASE 2: Changed from abandon to save
+	 * Handle player disconnect - pause and save timer
+	 * v1.0.7-beta: Timer pauses on disconnect, resumes on rejoin
 	 */
 	public static void onPlayerDisconnect(ServerPlayerEntity player) {
 		UUID playerId = player.getUuid();
 		TimerSession session = activeSessions.get(playerId);
 		
 		if (session != null) {
-			// PHASE 2: Save timer instead of abandoning
+			// Force pause if running
+			if (session.getState() == TimerState.RUNNING) {
+				session.pause();
+				FocusTimerShop.LOGGER.info("Auto-paused timer for {} on disconnect", 
+					player.getName().getString());
+			}
+			
+			// Save paused timer for restoration
 			TimerPersistence.saveTimer(playerId, session);
 			
-			FocusTimerShop.LOGGER.info("PHASE2_PERSIST: Saved timer for player {} on disconnect (state: {})", 
-				player.getName().getString(), session.getState());
+			FocusTimerShop.LOGGER.info("Saved timer for player {} on disconnect (state: PAUSED, elapsed: {}s)", 
+				player.getName().getString(), session.getElapsedTime());
 			
 			activeSessions.remove(playerId);
 		}
 	}
 	
 	/**
-	 * PHASE 2 NEW: Handle player join - restore saved timer
+	 * Handle player join - restore and resume timer
+	 * v1.0.7-beta: Timer resumes automatically on rejoin
 	 */
 	public static void onPlayerJoin(ServerPlayerEntity player) {
 		UUID playerId = player.getUuid();
@@ -333,22 +341,28 @@ public class TimerManager {
 		if (saveData != null) {
 			// Restore timer session
 			TimerSession session = TimerPersistence.restoreTimer(playerId, saveData);
+			
+			// Auto-resume if it was paused (from disconnect)
+			if (session.getState() == TimerState.PAUSED) {
+				session.resume();
+				FocusTimerShop.LOGGER.info("Auto-resumed timer for {} on rejoin", 
+					player.getName().getString());
+			}
+			
 			activeSessions.put(playerId, session);
 			
-			// Sync to client
+			// Sync to client - will open ActiveSessionScreen fullscreen
 			ModNetworking.sendTimerStateUpdate(player, session);
 			
 			// Notify player
-			String stateMsg = session.getState() == TimerState.RUNNING ? "tiếp tục" : "tạm dừng";
 			int minutes = session.getElapsedTime() / 60;
 			player.sendMessage(
-				Text.literal(String.format("§aTimer của bạn đã được khôi phục! (%s, %d phút)", 
-					stateMsg, minutes)), 
+				Text.literal(String.format("§aTimer tiếp tục! (%d phút đã trôi qua)", minutes)), 
 				false
 			);
 			
-			FocusTimerShop.LOGGER.info("PHASE2_PERSIST: Restored timer for player {} (type: {}, elapsed: {}s, state: {})",
-				player.getName().getString(), session.getType(), session.getElapsedTime(), session.getState());
+			FocusTimerShop.LOGGER.info("Restored and resumed timer for player {} (type: {}, elapsed: {}s)",
+				player.getName().getString(), session.getType(), session.getElapsedTime());
 		}
 	}
 	

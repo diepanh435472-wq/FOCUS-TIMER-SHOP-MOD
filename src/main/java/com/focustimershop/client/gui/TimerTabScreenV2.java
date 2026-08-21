@@ -7,43 +7,46 @@ import net.minecraft.client.font.TextRenderer;
 
 /**
  * v1.0.7-beta Timer UI Overhaul - New timer tab screen
- * Orchestrates: Category Selection → Clock Config → Active Session
+ * Orchestrates: Category Selection → Clock Config
+ * Active session now handled by fullscreen ActiveSessionScreen
  */
 public class TimerTabScreenV2 {
 	private final MainMenuScreen parent;
 	
 	// Sub-screens
 	private CategorySelectionScreen categoryScreen;
-	private ActiveSessionScreen activeSessionScreen;
 
 	public TimerTabScreenV2(MainMenuScreen parent) {
 		this.parent = parent;
 		this.categoryScreen = new CategorySelectionScreen(this);
-		this.activeSessionScreen = new ActiveSessionScreen(this);
 	}
 
 	public void render(DrawContext context, int x, int y, int width, int height, int mouseX, int mouseY, float delta) {
-		// Check if timer is active
-		if (ClientDataCache.hasActiveTimer()) {
-			activeSessionScreen.render(context, x, y, width, height, mouseX, mouseY, delta);
-			return;
-		}
-		
-		// Otherwise show category selection (which includes clock config)
+		// Category selection (which includes clock config)
 		categoryScreen.render(context, x, y, width, height, mouseX, mouseY, delta);
 	}
 
 	public boolean mouseClicked(double mouseX, double mouseY, int button, 
 	                            int contentX, int contentY, int contentWidth, int contentHeight) {
-		// Active timer - delegate to active session screen
-		if (ClientDataCache.hasActiveTimer()) {
-			return activeSessionScreen.mouseClicked(mouseX, mouseY, button, 
-				contentX, contentY, contentWidth, contentHeight);
-		}
-		
 		// Setup flow - delegate to category screen
 		return categoryScreen.mouseClicked(mouseX, mouseY, button, 
 			contentX, contentY, contentWidth, contentHeight);
+	}
+	
+	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+		return categoryScreen.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+	}
+	
+	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		return categoryScreen.mouseReleased(mouseX, mouseY, button);
+	}
+	
+	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+		return categoryScreen.keyPressed(keyCode, scanCode, modifiers);
+	}
+	
+	public boolean charTyped(char chr, int modifiers) {
+		return categoryScreen.charTyped(chr, modifiers);
 	}
 	
 	/**
@@ -60,10 +63,6 @@ public class TimerTabScreenV2 {
 	@Deprecated
 	public void showCategorySelection() {
 		// No-op - kept for compatibility
-	}
-	
-	public void onTimerStarted() {
-		// Automatically switches to active session view when timer starts
 	}
 	
 	/**

@@ -85,6 +85,22 @@ public class CategorySelectionScreen {
 		return clockConfig.mouseClicked(mouseX, mouseY, button, contentX, contentY + 70, contentWidth, contentHeight - 70);
 	}
 	
+	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+		return clockConfig.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+	}
+	
+	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		return clockConfig.mouseReleased(mouseX, mouseY, button);
+	}
+	
+	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+		return clockConfig.keyPressed(keyCode, scanCode, modifiers);
+	}
+	
+	public boolean charTyped(char chr, int modifiers) {
+		return clockConfig.charTyped(chr, modifiers);
+	}
+	
 	public SessionCategory getSelectedCategory() {
 		return selectedCategory;
 	}

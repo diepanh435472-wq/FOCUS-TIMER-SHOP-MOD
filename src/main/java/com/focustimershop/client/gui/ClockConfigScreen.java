@@ -4,34 +4,69 @@ import com.focustimershop.network.ModNetworking;
 import com.focustimershop.timer.ClockMode;
 import com.focustimershop.timer.SessionCategory;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.text.Text;
 
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
  * v1.0.7-beta Timer UI Overhaul - Clock configuration screen
+ * Added: Drag-to-adjust time + To-Do List with persistence
  */
 public class ClockConfigScreen {
 	private final TimerTabScreenV2 parent;
 	private final SessionCategory category;
 	private ClockMode clockMode = ClockMode.COUNTDOWN;
 	
-	private int hours = 0;
 	private int minutes = 25;
+	private int seconds = 0;
 	
-	private String encouragementNote = "";
-	private boolean showingNoteInput = false;
+	// Drag-to-adjust time
+	private boolean isDraggingTime = false;
+	private boolean draggingMinutes = false; // true = minutes, false = seconds
+	private double dragStartY = 0;
+	private int dragStartValue = 0;
+	private static final double DRAG_SENSITIVITY = 0.3; // pixels per unit
 	
-	private List<String> todoList = new ArrayList<>();
+	// 90+ minute warning
+	private boolean showingWarningPopup = false;
+	
+	// To-Do List with persistence
+	private TextFieldWidget todoInputField = null;
+	private List<TodoItem> todoItems = new ArrayList<>();
+	private static final int MAX_TODO_ITEMS = 20;
+	private static final String TODO_FILE = "focustimershop_todo.txt";
+	
+	// Edit mode
+	private int editingIndex = -1;
+	private TextFieldWidget editField = null;
+	
+	// Drag to reorder
+	private boolean isDraggingTodo = false;
+	private int draggingTodoIndex = -1;
+	private double todoDragStartY = 0;
+	
+	// Cache absolute coordinates for drag calculations
+	private int cachedTodoItemY = 0;
+	private int cachedTodoLineHeight = 24;
+	
+	private boolean showingNoteInput = false; // Deprecated but kept for compatibility
 	private boolean showingTodoPopup = false;
 
 	public ClockConfigScreen(TimerTabScreenV2 parent, SessionCategory category) {
 		this.parent = parent;
 		this.category = category;
+		loadTodoList();
 	}
 	
 	public boolean isShowingPopup() {
-		return showingNoteInput || showingTodoPopup;
+		return showingNoteInput || showingTodoPopup || showingWarningPopup;
 	}
 
 	public void renderContent(DrawContext context, int x, int y, int width, int height, int mouseX, int mouseY, float delta) {
@@ -44,12 +79,16 @@ public class ClockConfigScreen {
 			renderTodoPopup(context);
 			return;
 		}
+		if (showingWarningPopup) {
+			renderWarningPopup(context, mouseX, mouseY);
+			return;
+		}
 		
 		// Normal content (only rendered when no popup is open)
 		// Time picker at top
 		int pickerY = y + 10;
 		if (clockMode == ClockMode.COUNTDOWN) {
-			renderCountdownPicker(context, x, pickerY, width);
+			renderCountdownPicker(context, x, pickerY, width, mouseX, mouseY);
 		} else {
 			renderStopwatchInfo(context, x, pickerY, width);
 		}
@@ -59,18 +98,14 @@ public class ClockConfigScreen {
 		int toggleY = pickerY + 30;
 		renderModeToggle(context, toggleX, toggleY);
 		
-		// Note + Todo buttons
-		int noteY = y + 150;
-		context.fill(x + 20, noteY, x + width - 70, noteY + 35, 0xFF2A2A2A);
-		String noteLabel = encouragementNote.isEmpty() ? 
-			"Một Vài Lời Tiếp Thêm Năng Lượng" : 
-			encouragementNote.substring(0, Math.min(35, encouragementNote.length()));
-		context.drawText(parent.getTextRenderer(), noteLabel, x + 30, noteY + 12, 0xFFAAAAAA, false);
+		// To-Do List section
+		int todoY = y + 150;
+		int todoHeight = height - 240; // Reserve space for warning + start button
+		renderTodoList(context, x + 20, todoY, width - 40, todoHeight, mouseX, mouseY);
 		
-		int vButtonX = x + width - 60;
-		context.fill(vButtonX, noteY, vButtonX + 40, noteY + 35, 0xFF2A2A2A);
-		context.drawCenteredTextWithShadow(parent.getTextRenderer(), "V", 
-			vButtonX + 20, noteY + 12, 0xFFAAAAAA);
+		// Warning at bottom (if >90 min)
+		int warningY = y + height - 80;
+		renderWarningIfNeeded(context, x, warningY, width, mouseX, mouseY);
 		
 		// Start button
 		int startBtnY = y + height - 60;
@@ -78,6 +113,136 @@ public class ClockConfigScreen {
 		context.fill(startBtnX, startBtnY, startBtnX + 160, startBtnY + 45, 0xFF4AFF4A);
 		context.drawCenteredTextWithShadow(parent.getTextRenderer(), "BẮT ĐẦU", 
 			startBtnX + 80, startBtnY + 16, 0xFF000000);
+	}
+	
+	private void renderTodoList(DrawContext context, int x, int y, int width, int height, int mouseX, int mouseY) {
+		// Title
+		context.drawText(parent.getTextRenderer(), "§lTo-Do List", x, y, 0xFFFFFFFF, true);
+		
+		// Input field (only show if not editing)
+		int inputY = y + 20;
+		if (editingIndex == -1) {
+			if (todoInputField == null) {
+				todoInputField = new TextFieldWidget(parent.getTextRenderer(), x, inputY, width - 10, 18, Text.literal(""));
+				todoInputField.setMaxLength(100);
+				todoInputField.setPlaceholder(Text.literal("Thêm công việc... (Enter)"));
+			}
+			todoInputField.setPosition(x, inputY);
+			todoInputField.setWidth(width - 10);
+			todoInputField.render(context, mouseX, mouseY, 0);
+		}
+		
+		// Todo items
+		int itemY = inputY + 30;
+		int lineHeight = 24; // Increased for buttons
+		
+		// Cache for mouseReleased
+		cachedTodoItemY = itemY;
+		cachedTodoLineHeight = lineHeight;
+		for (int i = 0; i < todoItems.size(); i++) {
+			TodoItem item = todoItems.get(i);
+			int currentY = itemY + i * lineHeight;
+			
+			// Highlight if dragging over this position
+			if (isDraggingTodo && draggingTodoIndex != i) {
+				double relativeY = mouseY - currentY;
+				if (relativeY >= 0 && relativeY < lineHeight) {
+					context.fill(x, currentY, x + width, currentY + lineHeight, 0x404A9EFF);
+				}
+			}
+			
+			// Drag handle (≡) - BIGGER for easier grabbing
+			int handleX = x + 2;
+			int handleY = currentY + 4;
+			int handleWidth = 16;
+			int handleHeight = 16;
+			boolean handleHovered = mouseX >= handleX && mouseX <= handleX + handleWidth &&
+			                        mouseY >= handleY && mouseY <= handleY + handleHeight;
+			
+			// Draw larger drag handle box
+			int handleBg = handleHovered ? 0xFF4A5A6A : 0xFF2A2A2A;
+			context.fill(handleX, handleY, handleX + handleWidth, handleY + handleHeight, handleBg);
+			
+			int handleColor = handleHovered ? 0xFFFFFFFF : 0xFF888888;
+			// Center the icon in the box
+			int iconWidth = parent.getTextRenderer().getWidth("≡");
+			int iconX = handleX + (handleWidth - iconWidth) / 2;
+			int iconY = handleY + (handleHeight - parent.getTextRenderer().fontHeight) / 2;
+			context.drawText(parent.getTextRenderer(), "≡", iconX, iconY, handleColor, false);
+			
+			// Checkbox
+			int checkboxSize = 12;
+			int checkboxX = x + 18;
+			int checkboxY = currentY + 6;
+			boolean checkboxHovered = mouseX >= checkboxX && mouseX <= checkboxX + checkboxSize &&
+			                          mouseY >= checkboxY && mouseY <= checkboxY + checkboxSize;
+			
+			int checkboxColor = checkboxHovered ? 0xFF5A5A5A : 0xFF3A3A3A;
+			context.fill(checkboxX, checkboxY, checkboxX + checkboxSize, checkboxY + checkboxSize, checkboxColor);
+			
+			// Check mark if completed
+			if (item.completed) {
+				context.drawText(parent.getTextRenderer(), "§a✓", checkboxX + 2, checkboxY + 2, 0xFF00FF00, false);
+			}
+			
+			// Task text or edit field
+			int textX = checkboxX + checkboxSize + 5;
+			int textWidth = width - 80; // Reserve space for buttons
+			
+			if (editingIndex == i) {
+				// Editing mode - show text field
+				if (editField == null) {
+					editField = new TextFieldWidget(parent.getTextRenderer(), textX, checkboxY, textWidth, 16, Text.literal(""));
+					editField.setMaxLength(100);
+					editField.setText(item.text);
+					editField.setFocused(true);
+				}
+				editField.setPosition(textX, checkboxY);
+				editField.setWidth(textWidth);
+				editField.render(context, mouseX, mouseY, 0);
+			} else {
+				// Normal mode - show text
+				String displayText = item.text;
+				if (displayText.length() > 35) {
+					displayText = displayText.substring(0, 32) + "...";
+				}
+				
+				if (item.completed) {
+					// Strikethrough effect with dimmed color
+					context.drawText(parent.getTextRenderer(), "§8§m" + displayText, textX, checkboxY + 2, 0xFF666666, false);
+				} else {
+					// Normal bright text
+					context.drawText(parent.getTextRenderer(), displayText, textX, checkboxY + 2, 0xFFFFFFFF, false);
+				}
+			}
+			
+			// Action buttons (right side)
+			int btnSize = 14;
+			int btnY = currentY + 5;
+			
+			// Edit button (✎)
+			int editBtnX = x + width - 35;
+			boolean editHovered = mouseX >= editBtnX && mouseX <= editBtnX + btnSize &&
+			                      mouseY >= btnY && mouseY <= btnY + btnSize;
+			int editColor = editHovered ? 0xFF4A9EFF : 0xFF2A2A2A;
+			context.fill(editBtnX, btnY, editBtnX + btnSize, btnY + btnSize, editColor);
+			context.drawText(parent.getTextRenderer(), "§f✎", editBtnX + 2, btnY + 2, 0xFFFFFFFF, false);
+			
+			// Delete button (🗑)
+			int delBtnX = x + width - 18;
+			boolean delHovered = mouseX >= delBtnX && mouseX <= delBtnX + btnSize &&
+			                     mouseY >= btnY && mouseY <= btnY + btnSize;
+			int delColor = delHovered ? 0xFFFF4444 : 0xFF2A2A2A;
+			context.fill(delBtnX, btnY, delBtnX + btnSize, btnY + btnSize, delColor);
+			context.drawText(parent.getTextRenderer(), "§c✖", delBtnX + 2, btnY + 2, 0xFFFFFFFF, false);
+		}
+		
+		// Show item count
+		if (todoItems.size() > 0) {
+			String countText = "§7" + todoItems.size() + "/" + MAX_TODO_ITEMS;
+			int countWidth = parent.getTextRenderer().getWidth(countText);
+			context.drawText(parent.getTextRenderer(), countText, x + width - countWidth, y, 0xFF888888, false);
+		}
 	}
 	
 	private void renderModeToggle(DrawContext context, int x, int y) {
@@ -95,24 +260,62 @@ public class ClockConfigScreen {
 			x + btnWidth / 2, y + 55, 0xFFFFFFFF);
 	}
 	
-	private void renderCountdownPicker(DrawContext context, int x, int y, int width) {
+	private void renderCountdownPicker(DrawContext context, int x, int y, int width, int mouseX, int mouseY) {
 		int centerX = x + width / 2 - 80;
 		
-		int hoursX = centerX - 40;
-		renderTimeUnitWheel(context, hoursX, y, hours, 23);
-		context.drawCenteredTextWithShadow(parent.getTextRenderer(), "Giờ", 
-			hoursX + 25, y + 95, 0xFFAAAAAA);
+		int minsX = centerX - 40;
+		boolean minsHovered = mouseX >= minsX && mouseX <= minsX + 50 && 
+		                      mouseY >= y && mouseY <= y + 75;
+		renderTimeUnitWheel(context, minsX, y, minutes, 120, minsHovered || (isDraggingTime && draggingMinutes));
+		context.drawCenteredTextWithShadow(parent.getTextRenderer(), "Phút", 
+			minsX + 25, y + 95, 0xFFAAAAAA);
+		if (minsHovered && !isDraggingTime) {
+			context.drawText(parent.getTextRenderer(), "§7(drag)", minsX + 5, y + 80, 0xFF888888, false);
+		}
 		
 		context.drawCenteredTextWithShadow(parent.getTextRenderer(), ":", 
 			centerX + 35, y + 40, 0xFFFFFFFF);
 		
-		int minsX = centerX + 60;
-		renderTimeUnitWheel(context, minsX, y, minutes, 59);
-		context.drawCenteredTextWithShadow(parent.getTextRenderer(), "Phút", 
-			minsX + 25, y + 95, 0xFFAAAAAA);
+		int secsX = centerX + 60;
+		boolean secsHovered = mouseX >= secsX && mouseX <= secsX + 50 && 
+		                      mouseY >= y && mouseY <= y + 75;
+		renderTimeUnitWheel(context, secsX, y, seconds, 60, secsHovered || (isDraggingTime && !draggingMinutes));
+		context.drawCenteredTextWithShadow(parent.getTextRenderer(), "Giây", 
+			secsX + 25, y + 95, 0xFFAAAAAA);
+		if (secsHovered && !isDraggingTime) {
+			context.drawText(parent.getTextRenderer(), "§7(drag)", secsX + 5, y + 80, 0xFF888888, false);
+		}
+		
+		// Warning for >90 minutes (render AFTER todo list, at bottom)
 	}
 	
-	private void renderTimeUnitWheel(DrawContext context, int x, int y, int currentValue, int maxValue) {
+	private void renderWarningIfNeeded(DrawContext context, int x, int y, int width, int mouseX, int mouseY) {
+		if (minutes > 90) {
+			int warningY = y; // Position passed from caller
+			String warningText = "§e⚠ Vui lòng đọc lưu ý trước khi bấm giờ ";
+			int warningWidth = parent.getTextRenderer().getWidth(warningText);
+			
+			String linkText = "§e§ntại đây";
+			int linkWidth = parent.getTextRenderer().getWidth(linkText);
+			
+			int totalWidth = warningWidth + linkWidth;
+			int startX = x + width / 2 - totalWidth / 2;
+			
+			context.drawText(parent.getTextRenderer(), warningText, startX, warningY, 0xFFFFAA00, false);
+			
+			int linkX = startX + warningWidth;
+			boolean linkHovered = mouseX >= linkX && mouseX <= linkX + linkWidth &&
+			                      mouseY >= warningY && mouseY <= warningY + 10;
+			
+			if (linkHovered) {
+				context.drawText(parent.getTextRenderer(), "§e§n§ltại đây", linkX, warningY, 0xFFFFFF00, false);
+			} else {
+				context.drawText(parent.getTextRenderer(), linkText, linkX, warningY, 0xFFFFAA00, false);
+			}
+		}
+	}
+	
+	private void renderTimeUnitWheel(DrawContext context, int x, int y, int currentValue, int maxValue, boolean highlighted) {
 		int unitWidth = 50;
 		int rowHeight = 25;
 		
@@ -121,7 +324,8 @@ public class ClockConfigScreen {
 		context.drawCenteredTextWithShadow(parent.getTextRenderer(), prevStr, 
 			x + unitWidth / 2, y + 5, 0xFF666666);
 		
-		context.fill(x - 5, y + rowHeight - 2, x + unitWidth + 5, y + rowHeight * 2 + 2, 0xFF4A9EFF);
+		int bgColor = highlighted ? 0xFF5A7AFF : 0xFF4A9EFF;
+		context.fill(x - 5, y + rowHeight - 2, x + unitWidth + 5, y + rowHeight * 2 + 2, bgColor);
 		String currentStr = String.format("%02d", currentValue);
 		context.drawCenteredTextWithShadow(parent.getTextRenderer(), currentStr, 
 			x + unitWidth / 2, y + rowHeight + 5, 0xFFFFFFFF);
@@ -141,90 +345,69 @@ public class ClockConfigScreen {
 			x + width / 2, y + 70, 0xFFFFAA00);
 	}
 	
-	private void renderNoteInputPopup(DrawContext context) {
-		// Get actual screen dimensions
+	private void renderWarningPopup(DrawContext context, int mouseX, int mouseY) {
 		int screenWidth = parent.getParent().width;
 		int screenHeight = parent.getParent().height;
 		
-		// NOTE: Dim overlay is now drawn by MainMenuScreen BEFORE this is called
-		// This ensures it covers the sidebar too
-		
-		// Center modal on screen
-		int popupWidth = 300;
-		int popupHeight = 150;
+		// Center modal
+		int popupWidth = 400;
+		int popupHeight = 180;
 		int popupX = (screenWidth - popupWidth) / 2;
 		int popupY = (screenHeight - popupHeight) / 2;
 		
-		// Modal box with border effect (matching Lucky Chest style)
+		// Modal box
 		context.fill(popupX, popupY, popupX + popupWidth, popupY + popupHeight, 0xFF1A1A1A);
 		context.fill(popupX + 2, popupY + 2, popupX + popupWidth - 2, popupY + popupHeight - 2, 0xFF2A2A2A);
 		
+		// Warning icon
+		context.drawText(parent.getTextRenderer(), "§e⚠", popupX + 15, popupY + 15, 0xFFFFAA00, false);
+		
 		// Title
-		context.drawText(parent.getTextRenderer(), "Lời nhắc động viên:", 
-			popupX + 10, popupY + 10, 0xFFFFFFFF, false);
+		context.drawText(parent.getTextRenderer(), "§lCảnh báo sức khỏe", 
+			popupX + 35, popupY + 15, 0xFFFFAA00, true);
 		
-		// Close button [X] at top-right (matching Lucky Chest style)
-		String closeText = "§l§c[X]";
-		int closeWidth = parent.getTextRenderer().getWidth(closeText);
-		int closeX = popupX + popupWidth - closeWidth - 10;
-		int closeY = popupY + 10;
-		context.drawText(parent.getTextRenderer(), closeText, closeX, closeY, 0xFFFF5555, false);
+		// Message (word wrap)
+		String msg1 = "Theo các nhà nghiên cứu, việc tập trung liên tục";
+		String msg2 = "hơn 90 phút có thể làm tăng mệt mỏi và giảm hiệu";
+		String msg3 = "suất. Tôi khuyên bạn không nên tập trung trong";
+		String msg4 = "thời gian dài để tránh ảnh hưởng sức khỏe!";
 		
-		// Input field
-		context.fill(popupX + 10, popupY + 35, popupX + popupWidth - 10, popupY + 75, 0xFF0A0A0A);
-		context.drawText(parent.getTextRenderer(), encouragementNote, 
-			popupX + 15, popupY + 45, 0xFFFFFFFF, false);
+		context.drawText(parent.getTextRenderer(), msg1, popupX + 20, popupY + 45, 0xFFFFFFFF, false);
+		context.drawText(parent.getTextRenderer(), msg2, popupX + 20, popupY + 60, 0xFFFFFFFF, false);
+		context.drawText(parent.getTextRenderer(), msg3, popupX + 20, popupY + 75, 0xFFFFFFFF, false);
+		context.drawText(parent.getTextRenderer(), msg4, popupX + 20, popupY + 90, 0xFFFFFFFF, false);
 		
-		// OK button (keep for functional purposes)
-		int okBtnX = popupX + popupWidth / 2 - 40;
-		int okBtnY = popupY + popupHeight - 40;
-		context.fill(okBtnX, okBtnY, okBtnX + 80, okBtnY + 30, 0xFF4A9EFF);
-		context.drawCenteredTextWithShadow(parent.getTextRenderer(), "OK", 
-			okBtnX + 40, okBtnY + 10, 0xFFFFFFFF);
+		// Buttons
+		int btnY = popupY + popupHeight - 45;
+		int btnHeight = 30;
+		
+		// "Bỏ qua" button
+		int ignoreX = popupX + 30;
+		int ignoreWidth = 120;
+		boolean ignoreHovered = mouseX >= ignoreX && mouseX <= ignoreX + ignoreWidth &&
+		                        mouseY >= btnY && mouseY <= btnY + btnHeight;
+		int ignoreColor = ignoreHovered ? 0xFF5A5A5A : 0xFF3A3A3A;
+		context.fill(ignoreX, btnY, ignoreX + ignoreWidth, btnY + btnHeight, ignoreColor);
+		context.drawCenteredTextWithShadow(parent.getTextRenderer(), "Bỏ qua", 
+			ignoreX + ignoreWidth / 2, btnY + 10, 0xFFFFFFFF);
+		
+		// "Chấp nhận" button (adjust to 90 min)
+		int acceptX = popupX + popupWidth - 150;
+		int acceptWidth = 120;
+		boolean acceptHovered = mouseX >= acceptX && mouseX <= acceptX + acceptWidth &&
+		                        mouseY >= btnY && mouseY <= btnY + btnHeight;
+		int acceptColor = acceptHovered ? 0xFF5A9EFF : 0xFF4A9EFF;
+		context.fill(acceptX, btnY, acceptX + acceptWidth, btnY + btnHeight, acceptColor);
+		context.drawCenteredTextWithShadow(parent.getTextRenderer(), "Chấp nhận", 
+			acceptX + acceptWidth / 2, btnY + 10, 0xFFFFFFFF);
+	}
+	
+	private void renderNoteInputPopup(DrawContext context) {
+		// Deprecated - no longer used (replaced by To-Do List)
 	}
 	
 	private void renderTodoPopup(DrawContext context) {
-		// Get actual screen dimensions
-		int screenWidth = parent.getParent().width;
-		int screenHeight = parent.getParent().height;
-		
-		// NOTE: Dim overlay is now drawn by MainMenuScreen BEFORE this is called
-		
-		// Center modal on screen
-		int popupWidth = 350;
-		int popupHeight = 300;
-		int popupX = (screenWidth - popupWidth) / 2;
-		int popupY = (screenHeight - popupHeight) / 2;
-		
-		// Modal box with border effect (matching Lucky Chest style)
-		context.fill(popupX, popupY, popupX + popupWidth, popupY + popupHeight, 0xFF1A1A1A);
-		context.fill(popupX + 2, popupY + 2, popupX + popupWidth - 2, popupY + popupHeight - 2, 0xFF2A2A2A);
-		
-		// Title
-		context.drawText(parent.getTextRenderer(), "Danh sách công việc:", 
-			popupX + 10, popupY + 10, 0xFFFFFFFF, false);
-		
-		// Close button [X] at top-right (matching Lucky Chest style)
-		String closeText = "§l§c[X]";
-		int closeWidth = parent.getTextRenderer().getWidth(closeText);
-		int closeX = popupX + popupWidth - closeWidth - 10;
-		int closeY = popupY + 10;
-		context.drawText(parent.getTextRenderer(), closeText, closeX, closeY, 0xFFFF5555, false);
-		
-		// Task list
-		int listY = popupY + 35;
-		for (int i = 0; i < todoList.size() && i < 8; i++) {
-			String task = todoList.get(i);
-			context.drawText(parent.getTextRenderer(), "☐ " + task, 
-				popupX + 15, listY + i * 20, 0xFFAAAAAA, false);
-		}
-		
-		// Close button at bottom (keep for functional purposes)
-		int closeBtnX = popupX + popupWidth / 2 - 40;
-		int closeBtnY = popupY + popupHeight - 40;
-		context.fill(closeBtnX, closeBtnY, closeBtnX + 80, closeBtnY + 30, 0xFF4A9EFF);
-		context.drawCenteredTextWithShadow(parent.getTextRenderer(), "ĐÓNG", 
-			closeBtnX + 40, closeBtnY + 10, 0xFFFFFFFF);
+		// Deprecated - no longer used (replaced by To-Do List)
 	}
 
 	public boolean mouseClicked(double mouseX, double mouseY, int button, 
@@ -234,7 +417,53 @@ public class ClockConfigScreen {
 		int width = contentWidth;
 		int height = contentHeight;
 		
+		// Check todo input field first
+		if (editingIndex == -1 && todoInputField != null && todoInputField.mouseClicked(mouseX, mouseY, button)) {
+			todoInputField.setFocused(true);
+			return true;
+		}
+		
+		// Check edit field
+		if (editingIndex != -1 && editField != null && editField.mouseClicked(mouseX, mouseY, button)) {
+			editField.setFocused(true);
+			return true;
+		}
+		
 		// Handle popups with screen coordinates
+		if (showingWarningPopup) {
+			int screenWidth = parent.getParent().width;
+			int screenHeight = parent.getParent().height;
+			int popupWidth = 400;
+			int popupHeight = 180;
+			int popupX = (screenWidth - popupWidth) / 2;
+			int popupY = (screenHeight - popupHeight) / 2;
+			
+			int btnY = popupY + popupHeight - 45;
+			int btnHeight = 30;
+			
+			// "Bỏ qua" button
+			int ignoreX = popupX + 30;
+			int ignoreWidth = 120;
+			if (mouseX >= ignoreX && mouseX <= ignoreX + ignoreWidth &&
+			    mouseY >= btnY && mouseY <= btnY + btnHeight) {
+				showingWarningPopup = false;
+				return true;
+			}
+			
+			// "Chấp nhận" button (set to 90 min, 0 sec)
+			int acceptX = popupX + popupWidth - 150;
+			int acceptWidth = 120;
+			if (mouseX >= acceptX && mouseX <= acceptX + acceptWidth &&
+			    mouseY >= btnY && mouseY <= btnY + btnHeight) {
+				minutes = 90;
+				seconds = 0;
+				showingWarningPopup = false;
+				return true;
+			}
+			
+			return true; // Consume all clicks when popup is open
+		}
+		
 		if (showingNoteInput) {
 			int screenWidth = parent.getParent().width;
 			int screenHeight = parent.getParent().height;
@@ -308,52 +537,123 @@ public class ClockConfigScreen {
 			return true;
 		}
 		
-		// Time picker clicks
+		// Time picker clicks - check for drag start
 		if (clockMode == ClockMode.COUNTDOWN) {
 			int pickerY = y + 10;
 			int centerX = x + width / 2 - 80;
-			int rowHeight = 25;
 			int unitWidth = 50;
+			int wheelHeight = 75;
 			
-			int hoursX = centerX - 40;
-			if (mouseX >= hoursX && mouseX <= hoursX + unitWidth && 
-			    mouseY >= pickerY && mouseY <= pickerY + rowHeight * 3) {
-				int relativeY = (int)(mouseY - pickerY);
-				if (relativeY < rowHeight) {
-					hours = hours > 0 ? hours - 1 : 23;
-				} else if (relativeY >= rowHeight * 2) {
-					hours = hours < 23 ? hours + 1 : 0;
+			// Check warning link click first (at bottom of screen)
+			if (minutes > 90) {
+				int warningY = y + height - 80;
+				String warningText = "§e⚠ Vui lòng đọc lưu ý trước khi bấm giờ ";
+				int warningWidth = parent.getTextRenderer().getWidth(warningText);
+				String linkText = "§e§ntại đây";
+				int linkWidth = parent.getTextRenderer().getWidth(linkText);
+				int totalWidth = warningWidth + linkWidth;
+				int startX = x + width / 2 - totalWidth / 2;
+				int linkX = startX + warningWidth;
+				
+				if (mouseX >= linkX && mouseX <= linkX + linkWidth &&
+				    mouseY >= warningY && mouseY <= warningY + 10) {
+					showingWarningPopup = true;
+					return true;
 				}
-				return true;
 			}
 			
-			int minsX = centerX + 60;
+			int minsX = centerX - 40;
 			if (mouseX >= minsX && mouseX <= minsX + unitWidth && 
-			    mouseY >= pickerY && mouseY <= pickerY + rowHeight * 3) {
-				int relativeY = (int)(mouseY - pickerY);
-				if (relativeY < rowHeight) {
-					minutes = minutes > 0 ? minutes - 1 : 59;
-				} else if (relativeY >= rowHeight * 2) {
-					minutes = minutes < 59 ? minutes + 1 : 0;
-				}
+			    mouseY >= pickerY && mouseY <= pickerY + wheelHeight) {
+				isDraggingTime = true;
+				draggingMinutes = true;
+				dragStartY = mouseY;
+				dragStartValue = minutes;
+				return true;
+			}
+			
+			int secsX = centerX + 60;
+			if (mouseX >= secsX && mouseX <= secsX + unitWidth && 
+			    mouseY >= pickerY && mouseY <= pickerY + wheelHeight) {
+				isDraggingTime = true;
+				draggingMinutes = false;
+				dragStartY = mouseY;
+				dragStartValue = seconds;
 				return true;
 			}
 		}
 		
-		// Note button
-		int noteY = y + 150;
-		if (mouseX >= x + 20 && mouseX <= x + width - 70 && 
-		    mouseY >= noteY && mouseY <= noteY + 35) {
-			showingNoteInput = true;
-			return true;
-		}
+		// To-Do list interactions
+		int todoY = y + 150;
+		int inputY = todoY + 20;
+		int itemY = inputY + 30;
+		int lineHeight = 24;
 		
-		// V button
-		int vButtonX = x + width - 60;
-		if (mouseX >= vButtonX && mouseX <= vButtonX + 40 && 
-		    mouseY >= noteY && mouseY <= noteY + 35) {
-			showingTodoPopup = true;
-			return true;
+		for (int i = 0; i < todoItems.size(); i++) {
+			int currentY = itemY + i * lineHeight;
+			
+			// Drag handle (bigger hit area - 16x16)
+			int handleX = x + 22;
+			int handleWidth = 16;
+			int handleHeight = 16;
+			if (mouseX >= handleX && mouseX <= handleX + handleWidth &&
+			    mouseY >= currentY + 4 && mouseY <= currentY + 4 + handleHeight) {
+				isDraggingTodo = true;
+				draggingTodoIndex = i;
+				todoDragStartY = mouseY;
+				return true;
+			}
+			
+			// Checkbox
+			int checkboxSize = 12;
+			int checkboxX = x + 38;
+			int checkboxY = currentY + 6;
+			if (mouseX >= checkboxX && mouseX <= checkboxX + checkboxSize &&
+			    mouseY >= checkboxY && mouseY <= checkboxY + checkboxSize) {
+				todoItems.get(i).completed = !todoItems.get(i).completed;
+				saveTodoList();
+				return true;
+			}
+			
+			// Edit button
+			int btnSize = 14;
+			int btnY = currentY + 5;
+			int editBtnX = x + width - 55;
+			if (mouseX >= editBtnX && mouseX <= editBtnX + btnSize &&
+			    mouseY >= btnY && mouseY <= btnY + btnSize) {
+				if (editingIndex == i) {
+					// Save edit
+					if (editField != null) {
+						String newText = editField.getText().trim();
+						if (!newText.isEmpty()) {
+							todoItems.get(i).text = newText;
+							saveTodoList();
+						}
+					}
+					editingIndex = -1;
+					editField = null;
+				} else {
+					// Start editing
+					editingIndex = i;
+					editField = null; // Will be created in render
+				}
+				return true;
+			}
+			
+			// Delete button
+			int delBtnX = x + width - 38;
+			if (mouseX >= delBtnX && mouseX <= delBtnX + btnSize &&
+			    mouseY >= btnY && mouseY <= btnY + btnSize) {
+				todoItems.remove(i);
+				saveTodoList();
+				if (editingIndex == i) {
+					editingIndex = -1;
+					editField = null;
+				} else if (editingIndex > i) {
+					editingIndex--;
+				}
+				return true;
+			}
 		}
 		
 		// Start button
@@ -368,11 +668,161 @@ public class ClockConfigScreen {
 		return false;
 	}
 	
+	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+		// Time drag
+		if (isDraggingTime) {
+			double dragDelta = dragStartY - mouseY;
+			int unitsDelta = (int)(dragDelta * DRAG_SENSITIVITY);
+			
+			if (draggingMinutes) {
+				int newValue = dragStartValue + unitsDelta;
+				// Smooth loop: allow going negative/over for wrap calculation
+				while (newValue < 1) newValue += 120;
+				while (newValue > 120) newValue -= 120;
+				minutes = newValue;
+			} else {
+				int newValue = dragStartValue + unitsDelta;
+				// Smooth loop: 0-60
+				while (newValue < 0) newValue += 61;
+				while (newValue > 60) newValue -= 61;
+				seconds = newValue;
+			}
+			
+			return true;
+		}
+		
+		// Todo drag (reordering)
+		if (isDraggingTodo && draggingTodoIndex >= 0) {
+			// Visual feedback handled in render
+			return true;
+		}
+		
+		return false;
+	}
+	
+	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		if (isDraggingTime) {
+			isDraggingTime = false;
+			return true;
+		}
+		
+		// Todo reorder on release
+		if (isDraggingTodo && draggingTodoIndex >= 0) {
+			// Use cached absolute coordinates from renderTodoList
+			int itemY = cachedTodoItemY;
+			int lineHeight = cachedTodoLineHeight;
+			
+			// Calculate which item index mouse is over
+			double relativeY = mouseY - itemY;
+			int newIndex = (int)(relativeY / lineHeight);
+			
+			// Add half-line offset for better UX (drop in middle = insert after)
+			if (relativeY % lineHeight > lineHeight / 2) {
+				newIndex++;
+			}
+			
+			// Clamp to valid range
+			newIndex = Math.max(0, Math.min(newIndex, todoItems.size() - 1));
+			
+			// Debug output
+			System.out.println("Drag release: oldIndex=" + draggingTodoIndex + ", newIndex=" + newIndex + ", mouseY=" + mouseY + ", itemY=" + itemY);
+			
+			// Only reorder if actually moved
+			if (newIndex != draggingTodoIndex && newIndex >= 0 && newIndex < todoItems.size()) {
+				// Remove from old position
+				TodoItem item = todoItems.remove(draggingTodoIndex);
+				
+				// Adjust newIndex if removing item shifted positions
+				int insertIndex = newIndex;
+				if (draggingTodoIndex < newIndex) {
+					// Moving down: after removal, newIndex shifts down by 1
+					insertIndex = newIndex - 1;
+				}
+				
+				// Insert at new position
+				todoItems.add(insertIndex, item);
+				saveTodoList();
+				
+				System.out.println("Reordered: removed from " + draggingTodoIndex + ", inserted at " + insertIndex);
+				
+				// Adjust editingIndex if needed
+				if (editingIndex == draggingTodoIndex) {
+					editingIndex = insertIndex;
+				} else if (draggingTodoIndex < insertIndex) {
+					// Moved down: items between old and new shift up
+					if (editingIndex > draggingTodoIndex && editingIndex <= insertIndex) {
+						editingIndex--;
+					}
+				} else {
+					// Moved up: items between new and old shift down
+					if (editingIndex >= insertIndex && editingIndex < draggingTodoIndex) {
+						editingIndex++;
+					}
+				}
+			}
+			
+			isDraggingTodo = false;
+			draggingTodoIndex = -1;
+			return true;
+		}
+		
+		return false;
+	}
+	
+	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+		// ESC to cancel edit
+		if (keyCode == 256 && editingIndex != -1) { // ESC key
+			editingIndex = -1;
+			editField = null;
+			return true;
+		}
+		
+		// Handle edit field
+		if (editingIndex != -1 && editField != null && editField.isFocused()) {
+			if (keyCode == 257 || keyCode == 335) { // Enter or NumpadEnter
+				String newText = editField.getText().trim();
+				if (!newText.isEmpty()) {
+					todoItems.get(editingIndex).text = newText;
+					saveTodoList();
+				}
+				editingIndex = -1;
+				editField = null;
+				return true;
+			}
+			return editField.keyPressed(keyCode, scanCode, modifiers);
+		}
+		
+		// Handle todo input field
+		if (todoInputField != null && todoInputField.isFocused()) {
+			if (keyCode == 257 || keyCode == 335) { // Enter or NumpadEnter
+				String text = todoInputField.getText().trim();
+				if (!text.isEmpty() && todoItems.size() < MAX_TODO_ITEMS) {
+					todoItems.add(new TodoItem(text));
+					todoInputField.setText("");
+					saveTodoList();
+				}
+				return true;
+			}
+			return todoInputField.keyPressed(keyCode, scanCode, modifiers);
+		}
+		return false;
+	}
+	
+	public boolean charTyped(char chr, int modifiers) {
+		if (editingIndex != -1 && editField != null && editField.isFocused()) {
+			return editField.charTyped(chr, modifiers);
+		}
+		if (todoInputField != null && todoInputField.isFocused()) {
+			return todoInputField.charTyped(chr, modifiers);
+		}
+		return false;
+	}
+	
 	private void startTimer() {
 		int targetSeconds = 0;
 		
 		if (clockMode == ClockMode.COUNTDOWN) {
-			targetSeconds = hours * 3600 + minutes * 60;
+			targetSeconds = minutes * 60 + seconds;
 			if (targetSeconds == 0) {
 				return;
 			}
@@ -380,7 +830,12 @@ public class ClockConfigScreen {
 		
 		com.focustimershop.timer.TimerType legacyType = mapToLegacyType();
 		ModNetworking.sendTimerStart(legacyType, targetSeconds);
-		parent.onTimerStarted();
+		
+		// Open fullscreen active session screen
+		net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
+		if (client != null) {
+			client.setScreen(new ActiveSessionScreen());
+		}
 	}
 	
 	private com.focustimershop.timer.TimerType mapToLegacyType() {
@@ -398,6 +853,65 @@ public class ClockConfigScreen {
 			case TAP_LUYEN:
 			default:
 				return com.focustimershop.timer.TimerType.COUNTDOWN;
+		}
+	}
+	
+	// ===== PERSISTENCE =====
+	
+	private void loadTodoList() {
+		try {
+			Path todoPath = getTodoFilePath();
+			if (Files.exists(todoPath)) {
+				List<String> lines = Files.readAllLines(todoPath);
+				todoItems.clear();
+				for (String line : lines) {
+					if (line.trim().isEmpty()) continue;
+					
+					// Format: [x] text or [ ] text
+					boolean completed = line.startsWith("[x]") || line.startsWith("[X]");
+					String text = line.substring(3).trim(); // Skip "[ ] " or "[x] "
+					
+					if (!text.isEmpty()) {
+						TodoItem item = new TodoItem(text);
+						item.completed = completed;
+						todoItems.add(item);
+					}
+				}
+			}
+		} catch (IOException e) {
+			System.err.println("Failed to load todo list: " + e.getMessage());
+		}
+	}
+	
+	private void saveTodoList() {
+		try {
+			Path todoPath = getTodoFilePath();
+			List<String> lines = new ArrayList<>();
+			
+			for (TodoItem item : todoItems) {
+				String prefix = item.completed ? "[x] " : "[ ] ";
+				lines.add(prefix + item.text);
+			}
+			
+			Files.write(todoPath, lines);
+		} catch (IOException e) {
+			System.err.println("Failed to save todo list: " + e.getMessage());
+		}
+	}
+	
+	private Path getTodoFilePath() {
+		// Save in .minecraft folder
+		Path minecraftDir = Paths.get(System.getProperty("user.dir"));
+		return minecraftDir.resolve(TODO_FILE);
+	}
+	
+	static class TodoItem {
+		String text;
+		boolean completed;
+		
+		TodoItem(String text) {
+			this.text = text;
+			this.completed = false;
 		}
 	}
 }

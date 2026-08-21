@@ -378,16 +378,24 @@ public class MainMenuScreen extends Screen {
 	
 	@Override
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
-		if (currentTab == GuiTab.SHOP) {
+		if (currentTab == GuiTab.TIMER) {
+			return timerTab.mouseReleased(mouseX, mouseY, button);
+		} else if (currentTab == GuiTab.SHOP) {
 			return shopTab.mouseReleased(mouseX, mouseY, button);
+		} else if (currentTab == GuiTab.BULK_ORDER) {
+			return bulkOrderTab.mouseReleased(mouseX, mouseY, button);
 		}
 		return super.mouseReleased(mouseX, mouseY, button);
 	}
 	
 	@Override
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-		if (currentTab == GuiTab.SHOP) {
+		if (currentTab == GuiTab.TIMER) {
+			return timerTab.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+		} else if (currentTab == GuiTab.SHOP) {
 			return shopTab.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+		} else if (currentTab == GuiTab.BULK_ORDER) {
+			return bulkOrderTab.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
 		}
 		return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
 	}
@@ -395,7 +403,11 @@ public class MainMenuScreen extends Screen {
 	@Override
 	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
 		// Forward keyboard input to current tab
-		if (currentTab == GuiTab.SHOP) {
+		if (currentTab == GuiTab.TIMER) {
+			if (timerTab.keyPressed(keyCode, scanCode, modifiers)) {
+				return true;
+			}
+		} else if (currentTab == GuiTab.SHOP) {
 			if (shopTab.keyPressed(keyCode, scanCode, modifiers)) {
 				return true;
 			}
@@ -410,7 +422,11 @@ public class MainMenuScreen extends Screen {
 	@Override
 	public boolean charTyped(char chr, int modifiers) {
 		// Forward character typing to current tab
-		if (currentTab == GuiTab.SHOP) {
+		if (currentTab == GuiTab.TIMER) {
+			if (timerTab.charTyped(chr, modifiers)) {
+				return true;
+			}
+		} else if (currentTab == GuiTab.SHOP) {
 			if (shopTab.charTyped(chr, modifiers)) {
 				return true;
 			}
