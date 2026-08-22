@@ -19,6 +19,10 @@ public class FocusTimerShopClient implements ClientModInitializer {
 		FocusTimerShop.LOGGER.info("[CLIENT INIT] Starting Focus Timer Shop Client initialization");
 
 		try {
+			// v1.0.7-beta - Initialize Floating Window Registry
+			FocusTimerShop.LOGGER.info("[CLIENT INIT] Initializing Floating Window Registry");
+			com.focustimershop.todo.FloatingWindowRegistry.init();
+			
 			// Initialize Music Player
 			FocusTimerShop.LOGGER.info("[CLIENT INIT] Initializing Music Player");
 			com.focustimershop.music.MusicPlayerManager.initialize();

@@ -364,7 +364,10 @@ public class MainMenuScreen extends Screen {
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-		if (currentTab == GuiTab.SHOP) {
+		if (currentTab == GuiTab.TIMER) {
+			// Forward to timer tab (for TodoListWindow scrolling)
+			return timerTab.mouseScrolled(mouseX, mouseY, 0, amount);
+		} else if (currentTab == GuiTab.SHOP) {
 			return shopTab.mouseScrolled(mouseX, mouseY, 0, amount);
 		} else if (currentTab == GuiTab.BULK_ORDER) {
 			return bulkOrderTab.mouseScrolled(mouseX, mouseY, 0, amount);

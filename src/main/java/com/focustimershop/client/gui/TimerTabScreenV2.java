@@ -49,6 +49,10 @@ public class TimerTabScreenV2 {
 		return categoryScreen.charTyped(chr, modifiers);
 	}
 	
+	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+		return categoryScreen.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+	}
+	
 	/**
 	 * Deprecated - no longer needed as CategorySelectionScreen contains ClockConfigScreen
 	 */
@@ -79,5 +83,9 @@ public class TimerTabScreenV2 {
 	
 	public MainMenuScreen getParent() {
 		return parent;
+	}
+	
+	public net.minecraft.client.MinecraftClient getClient() {
+		return net.minecraft.client.MinecraftClient.getInstance();
 	}
 }

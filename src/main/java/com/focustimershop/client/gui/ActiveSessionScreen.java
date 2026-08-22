@@ -4,6 +4,8 @@ import com.focustimershop.client.ClientDataCache;
 import com.focustimershop.network.ModNetworking;
 import com.focustimershop.timer.TimerState;
 import com.focustimershop.timer.TimerType;
+import com.focustimershop.todo.FloatingWindowType;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
@@ -14,6 +16,7 @@ import java.time.format.DateTimeFormatter;
 /**
  * v1.0.7-beta Timer UI Overhaul - FULLSCREEN active session screen
  * Features: draggable ring, swipe-to-cancel, larger countdown
+ * + Floating window system (To-Do List, Menu button)
  */
 public class ActiveSessionScreen extends Screen {
 	private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
@@ -31,21 +34,38 @@ public class ActiveSessionScreen extends Screen {
 	private int ringOffsetX = 0;
 	private int ringOffsetY = 0;
 	private boolean isDraggingRing = false;
-	private int dragStartMouseX = 0;
-	private int dragStartMouseY = 0;
+	private double dragStartMouseX = 0;
+	private double dragStartMouseY = 0;
 	private int dragStartOffsetX = 0;
 	private int dragStartOffsetY = 0;
 	
 	// Swipe-to-cancel slider
 	private static final int SLIDER_WIDTH = 300;
 	private static final int SLIDER_HEIGHT = 50;
-	private static final int SLIDER_DOT_SIZE = 40;
-	private int sliderDotX = 0; // 0 to (SLIDER_WIDTH - SLIDER_DOT_SIZE)
+	private int sliderDotX = 0; // 0 to (SLIDER_WIDTH - SLIDER_HEIGHT) for smooth motion
 	private boolean isDraggingSlider = false;
-	private int sliderDragStartX = 0;
+	
+	// v1.0.7-beta - Floating window system
+	private TodoListWindow todoWindow;
+	private FloatingWindowMenu floatingMenu;
 
 	public ActiveSessionScreen() {
 		super(Text.literal("Timer Session"));
+		
+		// Initialize floating window system
+		MinecraftClient client = MinecraftClient.getInstance();
+		
+		// Force reload tasks to ensure fresh data
+		if (client.player != null) {
+			System.out.println("[ActiveSessionScreen] Reloading tasks for player " + client.player.getUuid());
+			com.focustimershop.todo.TodoManager.reloadTasks(client.player.getUuid());
+		}
+		
+		this.todoWindow = new TodoListWindow(client);
+		this.floatingMenu = new FloatingWindowMenu(client);
+		
+		// Wire up menu callback to open windows
+		this.floatingMenu.setWindowTypeSelectedCallback(this::onWindowTypeSelected);
 	}
 
 	@Override
@@ -66,20 +86,11 @@ public class ActiveSessionScreen extends Screen {
 			return;
 		}
 
-		// Calculate ring center with offset (clamped to screen bounds)
+		// Calculate ring center with offset - DO NOT modify ringOffsetX/Y here!
 		int defaultCenterX = this.width / 2;
-		int defaultCenterY = this.height / 2 - 60; // Moved up to make room for slider
+		int defaultCenterY = this.height / 2 - 60;
 		int centerX = defaultCenterX + ringOffsetX;
 		int centerY = defaultCenterY + ringOffsetY;
-		
-		// Clamp to screen boundaries (keep ring fully visible)
-		int margin = (int)RING_OUTER_RADIUS + 10;
-		centerX = Math.max(margin, Math.min(this.width - margin, centerX));
-		centerY = Math.max(margin, Math.min(this.height - margin - 100, centerY)); // Extra margin for slider
-		
-		// Update offset based on clamped position
-		ringOffsetX = centerX - defaultCenterX;
-		ringOffsetY = centerY - defaultCenterY;
 		
 		// Calculate progress
 		float progress = calculateProgress(type, elapsed, target);
@@ -117,6 +128,17 @@ public class ActiveSessionScreen extends Screen {
 		// Swipe-to-cancel slider at bottom
 		renderSwipeSlider(context, mouseX, mouseY);
 		
+		// v1.0.7-beta - Render floating windows AFTER main content (on top)
+		// Render TodoListWindow (shown by default unless closed)
+		if (todoWindow != null && todoWindow.isVisible()) {
+			todoWindow.render(context, mouseX, mouseY, delta);
+		}
+		
+		// Render floating menu (button always visible, popup conditional)
+		if (floatingMenu != null) {
+			floatingMenu.render(context, mouseX, mouseY, delta);
+		}
+		
 		super.render(context, mouseX, mouseY, delta);
 	}
 	
@@ -127,23 +149,23 @@ public class ActiveSessionScreen extends Screen {
 		int sliderX = this.width / 2 - SLIDER_WIDTH / 2;
 		int sliderY = this.height - 100;
 		
-		// Rounded rectangle background track (using fill approximation)
-		int cornerRadius = 25;
-		drawRoundedRect(context, sliderX, sliderY, SLIDER_WIDTH, SLIDER_HEIGHT, cornerRadius, 0xFF2A2A2A);
+		// Rounded rectangle background track with REAL rounded corners
+		int cornerRadius = SLIDER_HEIGHT / 2; // Perfect rounded ends
+		drawRoundedRectActual(context, sliderX, sliderY, SLIDER_WIDTH, SLIDER_HEIGHT, cornerRadius, 0xFF2A2A2A);
 		
 		// Progress fill (red gradient) - also rounded
-		float fillProgress = (float)sliderDotX / (SLIDER_WIDTH - SLIDER_DOT_SIZE);
-		int fillWidth = (int)(SLIDER_WIDTH * fillProgress);
+		float fillProgress = (float)sliderDotX / (SLIDER_WIDTH - SLIDER_HEIGHT);
+		int fillWidth = sliderDotX + SLIDER_HEIGHT; // Fill up to thumb's right edge
 		if (fillWidth > cornerRadius * 2) { // Only draw if wide enough
 			int startColor = 0xFF4A0000;
 			int endColor = 0xFFFF0000;
-			drawRoundedRect(context, sliderX, sliderY, fillWidth, SLIDER_HEIGHT, cornerRadius,
+			drawRoundedRectActual(context, sliderX, sliderY, fillWidth, SLIDER_HEIGHT, cornerRadius,
 				interpolateColor(startColor, endColor, fillProgress));
 		}
 		
-		// Large circular dot inside track
-		int dotRadius = SLIDER_DOT_SIZE / 2; // Circle radius
-		int dotCenterX = sliderX + sliderDotX + SLIDER_DOT_SIZE / 2;
+		// Large circular dot INSIDE track - positioned at left edge at rest
+		int dotRadius = (SLIDER_HEIGHT - 4) / 2; // Fit snugly inside track with 2px padding
+		int dotCenterX = sliderX + dotRadius + 2 + sliderDotX; // 2px padding from track edge
 		int dotCenterY = sliderY + SLIDER_HEIGHT / 2;
 		
 		boolean dotHovered = Math.sqrt(Math.pow(mouseX - dotCenterX, 2) + Math.pow(mouseY - dotCenterY, 2)) <= dotRadius;
@@ -159,32 +181,58 @@ public class ActiveSessionScreen extends Screen {
 			dotCenterY - this.textRenderer.fontHeight / 2,
 			0xFF000000, false);
 		
-		// Instruction text
-		if (sliderDotX < SLIDER_WIDTH - SLIDER_DOT_SIZE - 40) {
+		// Instruction text - positioned in empty space to the right of thumb
+		int maxSlide = SLIDER_WIDTH - SLIDER_HEIGHT;
+		if (sliderDotX < maxSlide * 0.5f) { // Only show when thumb not too far right
 			String instruction = fillProgress > 0.3f ? "§cKéo tiếp để hủy timer" : "§7Kéo sang phải để hủy";
 			int instructionWidth = this.textRenderer.getWidth(instruction);
-			context.drawText(this.textRenderer, instruction,
-				sliderX + SLIDER_WIDTH / 2 - instructionWidth / 2,
-				sliderY + SLIDER_HEIGHT / 2 - this.textRenderer.fontHeight / 2,
-				0xFFFFFFFF, true);
+			// Position text in the space between thumb and right edge
+			int textX = dotCenterX + dotRadius + 20;
+			if (textX + instructionWidth < sliderX + SLIDER_WIDTH - 10) {
+				context.drawText(this.textRenderer, instruction,
+					textX,
+					sliderY + SLIDER_HEIGHT / 2 - this.textRenderer.fontHeight / 2,
+					0xFFFFFFFF, true);
+			}
 		}
 	}
 	
 	/**
-	 * Draw rounded rectangle
+	 * Draw ACTUAL rounded rectangle with proper circular corners
 	 */
-	private void drawRoundedRect(DrawContext context, int x, int y, int width, int height, int radius, int color) {
-		// Top and bottom rectangles
-		context.fill(x + radius, y, x + width - radius, y + height, color);
-		// Left and right rectangles
-		context.fill(x, y + radius, x + radius, y + height - radius, color);
-		context.fill(x + width - radius, y + radius, x + width, y + height - radius, color);
+	private void drawRoundedRectActual(DrawContext context, int x, int y, int width, int height, int radius, int color) {
+		// Main body rectangles (avoid overdraw at corners)
+		context.fill(x + radius, y, x + width - radius, y + height, color); // Center horizontal strip
+		context.fill(x, y + radius, x + radius, y + height - radius, color); // Left edge
+		context.fill(x + width - radius, y + radius, x + width, y + height - radius, color); // Right edge
 		
-		// Four corner circles (simplified - just fill squares for performance)
-		context.fill(x, y + radius, x + radius, y + height - radius, color); // Left
-		context.fill(x + width - radius, y + radius, x + width, y + height - radius, color); // Right
-		context.fill(x + radius, y, x + width - radius, y + radius, color); // Top
-		context.fill(x + radius, y + height - radius, x + width - radius, y + height, color); // Bottom
+		// Four circular corners using actual circles
+		drawQuarterCircle(context, x + radius, y + radius, radius, color, 2); // Top-left
+		drawQuarterCircle(context, x + width - radius - 1, y + radius, radius, color, 3); // Top-right
+		drawQuarterCircle(context, x + radius, y + height - radius - 1, radius, color, 1); // Bottom-left
+		drawQuarterCircle(context, x + width - radius - 1, y + height - radius - 1, radius, color, 0); // Bottom-right
+	}
+	
+	/**
+	 * Draw quarter circle for rounded corners
+	 * quadrant: 0=BR, 1=BL, 2=TL, 3=TR
+	 */
+	private void drawQuarterCircle(DrawContext context, int centerX, int centerY, int radius, int color, int quadrant) {
+		int segments = 16; // Smooth enough for corners
+		float startAngle = quadrant * (float)Math.PI / 2;
+		float endAngle = (quadrant + 1) * (float)Math.PI / 2;
+		
+		for (int i = 0; i < segments; i++) {
+			float angle1 = startAngle + (endAngle - startAngle) * i / segments;
+			float angle2 = startAngle + (endAngle - startAngle) * (i + 1) / segments;
+			
+			int x1 = (int)(centerX + Math.cos(angle1) * radius);
+			int y1 = (int)(centerY + Math.sin(angle1) * radius);
+			int x2 = (int)(centerX + Math.cos(angle2) * radius);
+			int y2 = (int)(centerY + Math.sin(angle2) * radius);
+			
+			drawTriangle(context, centerX, centerY, x1, y1, x2, y2, color);
+		}
 	}
 	
 	/**
@@ -227,19 +275,28 @@ public class ActiveSessionScreen extends Screen {
 	
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+		// v1.0.7-beta - Check floating windows FIRST (they render on top)
+		if (floatingMenu != null && floatingMenu.mouseClicked(mouseX, mouseY, button)) {
+			return true;
+		}
+		
+		if (todoWindow != null && todoWindow.isVisible() && todoWindow.mouseClicked(mouseX, mouseY, button)) {
+			return true;
+		}
+		
 		if (button == 0) { // Left click
 			// Check slider circle click
 			int sliderX = this.width / 2 - SLIDER_WIDTH / 2;
 			int sliderY = this.height - 100;
-			int dotRadius = SLIDER_DOT_SIZE / 2;
-			int dotCenterX = sliderX + sliderDotX + SLIDER_DOT_SIZE / 2;
+			int dotRadius = (SLIDER_HEIGHT - 4) / 2;
+			int dotCenterX = sliderX + dotRadius + 2 + sliderDotX;
 			int dotCenterY = sliderY + SLIDER_HEIGHT / 2;
 			
 			double distToDot = Math.sqrt(Math.pow(mouseX - dotCenterX, 2) + Math.pow(mouseY - dotCenterY, 2));
 			
 			if (distToDot <= dotRadius) {
 				isDraggingSlider = true;
-				sliderDragStartX = (int)mouseX - sliderDotX;
+				// No drag start tracking needed - using direct position calculation
 				return true;
 			}
 			
@@ -255,8 +312,8 @@ public class ActiveSessionScreen extends Screen {
 			
 			if (distFromCenter <= RING_OUTER_RADIUS) {
 				isDraggingRing = true;
-				dragStartMouseX = (int)mouseX;
-				dragStartMouseY = (int)mouseY;
+				dragStartMouseX = mouseX; // Keep double precision
+				dragStartMouseY = mouseY;
 				dragStartOffsetX = ringOffsetX;
 				dragStartOffsetY = ringOffsetY;
 				return true;
@@ -268,21 +325,40 @@ public class ActiveSessionScreen extends Screen {
 	
 	@Override
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+		// v1.0.7-beta - Check floating windows for dragging
+		if (todoWindow != null && todoWindow.isVisible() && todoWindow.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
+			return true;
+		}
+		
 		if (isDraggingSlider) {
-			// Update slider position
+			// FIX: Use rental slider's proven pattern - direct position calculation
 			int sliderX = this.width / 2 - SLIDER_WIDTH / 2;
-			sliderDotX = (int)mouseX - sliderDragStartX;
-			sliderDotX = Math.max(0, Math.min(SLIDER_WIDTH - SLIDER_DOT_SIZE, sliderDotX));
+			updateSliderPosition((int)mouseX, sliderX, SLIDER_WIDTH, SLIDER_HEIGHT);
 			return true;
 		}
 		
 		if (isDraggingRing) {
-			// Update ring offset
-			int deltaMouseX = (int)mouseX - dragStartMouseX;
-			int deltaMouseY = (int)mouseY - dragStartMouseY;
+			// Direct 1:1 mouse tracking - preserve sub-pixel precision
+			double deltaMouseX = mouseX - dragStartMouseX;
+			double deltaMouseY = mouseY - dragStartMouseY;
 			
-			ringOffsetX = dragStartOffsetX + deltaMouseX;
-			ringOffsetY = dragStartOffsetY + deltaMouseY;
+			// Calculate new offset with sub-pixel precision
+			int newOffsetX = (int)(dragStartOffsetX + deltaMouseX);
+			int newOffsetY = (int)(dragStartOffsetY + deltaMouseY);
+			
+			// Clamp to screen boundaries (only during drag)
+			int defaultCenterX = this.width / 2;
+			int defaultCenterY = this.height / 2 - 60;
+			int centerX = defaultCenterX + newOffsetX;
+			int centerY = defaultCenterY + newOffsetY;
+			
+			int margin = (int)RING_OUTER_RADIUS + 10;
+			centerX = Math.max(margin, Math.min(this.width - margin, centerX));
+			centerY = Math.max(margin, Math.min(this.height - margin - 100, centerY));
+			
+			// Apply clamped position
+			ringOffsetX = centerX - defaultCenterX;
+			ringOffsetY = centerY - defaultCenterY;
 			
 			return true;
 		}
@@ -290,24 +366,38 @@ public class ActiveSessionScreen extends Screen {
 		return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
 	}
 	
+	/**
+	 * Update slider position using rental slider's proven pattern
+	 * Recalculates from current mouse position, not delta-based
+	 */
+	private void updateSliderPosition(int mouseX, int sliderX, int sliderWidth, int sliderHeight) {
+		int maxSlide = sliderWidth - sliderHeight;
+		// Direct ratio calculation - no delta accumulation
+		float ratio = Math.max(0, Math.min(1, (mouseX - sliderX) / (float)sliderWidth));
+		sliderDotX = (int)(ratio * maxSlide);
+	}
+	
 	@Override
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		// v1.0.7-beta - Check floating windows for release
+		if (todoWindow != null && todoWindow.isVisible() && todoWindow.mouseReleased(mouseX, mouseY, button)) {
+			return true;
+		}
+		
 		if (isDraggingSlider) {
 			isDraggingSlider = false;
 			
 			// Check if slider was dragged far enough to cancel (>80%)
-			float progress = (float)sliderDotX / (SLIDER_WIDTH - SLIDER_DOT_SIZE);
+			int maxSlide = SLIDER_WIDTH - SLIDER_HEIGHT;
+			float progress = (float)sliderDotX / maxSlide;
 			if (progress >= 0.8f) {
-				// Cancel timer
-				int elapsedSeconds = ClientDataCache.getElapsedSeconds();
-				int targetSeconds = ClientDataCache.getTargetSeconds();
-				TimerType type = ClientDataCache.getCurrentTimerType();
+				// FIX: Immediately clear client-side timer state BEFORE sending packet
+				// This prevents timer from continuing to run while waiting for server response
+				ClientDataCache.clearTimerState();
 				
-				boolean tooShort = elapsedSeconds < 60;
-				boolean incompleteTarget = (type != TimerType.STOPWATCH && targetSeconds > 0 && elapsedSeconds < targetSeconds);
-				boolean abandoned = tooShort || incompleteTarget;
-				
-				ModNetworking.sendTimerStop(abandoned);
+				// FIX: When user cancels via slider, ALWAYS give normal rewards (abandoned=false)
+				// User intentionally stopped the timer, not abandoning it
+				ModNetworking.sendTimerStop(false); // false = NOT abandoned, give full rewards
 				
 				// Return to main menu
 				if (this.client != null) {
@@ -331,7 +421,7 @@ public class ActiveSessionScreen extends Screen {
 	
 	@Override
 	public boolean shouldPause() {
-		return false;
+		return true; // Pause game when timer screen is active
 	}
 	
 	@Override
@@ -497,5 +587,56 @@ public class ActiveSessionScreen extends Screen {
 		} else {
 			return String.format("%02d:%02d", minutes, seconds);
 		}
+	}
+	
+	@Override
+	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+		// v1.0.7-beta - Check floating windows for keyboard input
+		if (floatingMenu != null && floatingMenu.isOpen() && floatingMenu.keyPressed(keyCode, scanCode, modifiers)) {
+			return true;
+		}
+		
+		if (todoWindow != null && todoWindow.isVisible() && todoWindow.keyPressed(keyCode, scanCode, modifiers)) {
+			return true;
+		}
+		
+		return super.keyPressed(keyCode, scanCode, modifiers);
+	}
+	
+	@Override
+	public boolean charTyped(char chr, int modifiers) {
+		// v1.0.7-beta - Check floating windows for char input
+		if (floatingMenu != null && floatingMenu.isOpen() && floatingMenu.charTyped(chr, modifiers)) {
+			return true;
+		}
+		
+		if (todoWindow != null && todoWindow.isVisible() && todoWindow.charTyped(chr, modifiers)) {
+			return true;
+		}
+		
+		return super.charTyped(chr, modifiers);
+	}
+	
+	@Override
+	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+		// v1.0.7-beta - Check TodoListWindow for scroll events
+		if (todoWindow != null && todoWindow.isVisible() && todoWindow.mouseScrolled(mouseX, mouseY, 0, amount)) {
+			return true;
+		}
+		
+		return super.mouseScrolled(mouseX, mouseY, amount);
+	}
+	
+	/**
+	 * v1.0.7-beta - Callback when a window type is selected from menu
+	 */
+	private void onWindowTypeSelected(FloatingWindowType type) {
+		if (type.getId().equals("todo_list")) {
+			// Open/restore TodoListWindow
+			if (todoWindow != null) {
+				todoWindow.open();
+			}
+		}
+		// Future window types will be handled here
 	}
 }
