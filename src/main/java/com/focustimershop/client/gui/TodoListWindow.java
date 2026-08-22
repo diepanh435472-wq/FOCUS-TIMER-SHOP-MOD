@@ -130,13 +130,14 @@ public class TodoListWindow {
 	}
 	
 	public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-		// v1.0.7-beta FIX: Only render on ActiveSessionScreen (timer running screen)
-		// NOT on CategorySelectionScreen (timer setup screen)
+		// v1.0.7-beta FIX: Only render if we're on a valid Timer screen
 		net.minecraft.client.gui.screen.Screen currentScreen = client.currentScreen;
-		boolean isActiveSessionScreen = currentScreen instanceof ActiveSessionScreen;
+		boolean isValidScreen = currentScreen instanceof ActiveSessionScreen || 
+		                        (currentScreen instanceof MainMenuScreen && 
+		                         ((MainMenuScreen)currentScreen).getCurrentTab() == MainMenuScreen.GuiTab.TIMER);
 		
-		if (!isActiveSessionScreen) {
-			return; // Only render on ActiveSessionScreen (ảnh 2 - timer running)
+		if (!isValidScreen) {
+			return; // Don't render if not on Timer screens
 		}
 		
 		// Don't render if closed

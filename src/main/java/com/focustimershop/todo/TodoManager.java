@@ -33,6 +33,7 @@ public class TodoManager {
 	
 	/**
 	 * Get all tasks for a player (incomplete first, then completed)
+	 * Returns an UNMODIFIABLE view - do not modify directly!
 	 */
 	public static List<TodoTask> getTasks(UUID playerUuid) {
 		if (!playerTasks.containsKey(playerUuid)) {
@@ -45,15 +46,16 @@ public class TodoManager {
 			playerTasks.put(playerUuid, tasks);
 		}
 		
-		// Sort: incomplete tasks by order, then completed tasks
-		return tasks.stream()
-			.sorted((a, b) -> {
-				if (a.isCompleted() == b.isCompleted()) {
-					return Integer.compare(a.getOrder(), b.getOrder());
-				}
-				return a.isCompleted() ? 1 : -1; // Incomplete first
-			})
-			.collect(Collectors.toList());
+		// IMPORTANT: Sort in-place instead of creating a copy
+		// This ensures all TodoListWindow instances see the same data
+		tasks.sort((a, b) -> {
+			if (a.isCompleted() == b.isCompleted()) {
+				return Integer.compare(a.getOrder(), b.getOrder());
+			}
+			return a.isCompleted() ? 1 : -1; // Incomplete first
+		});
+		
+		return tasks; // Return the SAME list, not a copy
 	}
 	
 	/**
@@ -242,7 +244,10 @@ public class TodoManager {
 	 */
 	private static void loadTasks(UUID playerUuid) {
 		File file = new File(TODO_DIR, playerUuid + "_tasks.json");
+		FocusTimerShop.LOGGER.info("[TodoManager] Loading tasks from file: {}", file.getAbsolutePath());
+		
 		if (!file.exists()) {
+			FocusTimerShop.LOGGER.info("[TodoManager] No tasks file found, creating empty list for player {}", playerUuid);
 			playerTasks.put(playerUuid, new ArrayList<>());
 			return;
 		}
@@ -257,9 +262,9 @@ public class TodoManager {
 			}
 			
 			playerTasks.put(playerUuid, tasks);
-			FocusTimerShop.LOGGER.info("Loaded {} tasks for player {}", tasks.size(), playerUuid);
+			FocusTimerShop.LOGGER.info("[TodoManager] Successfully loaded {} tasks for player {}", tasks.size(), playerUuid);
 		} catch (Exception e) {
-			FocusTimerShop.LOGGER.error("Failed to load tasks for player " + playerUuid, e);
+			FocusTimerShop.LOGGER.error("[TodoManager] Exception while loading tasks for player " + playerUuid, e);
 			playerTasks.put(playerUuid, new ArrayList<>());
 		}
 	}
@@ -269,10 +274,15 @@ public class TodoManager {
 	 */
 	private static void saveTasks(UUID playerUuid) {
 		List<TodoTask> tasks = playerTasks.get(playerUuid);
-		if (tasks == null) return;
+		if (tasks == null) {
+			FocusTimerShop.LOGGER.warn("[TodoManager] saveTasks() called but tasks list is null for player {}", playerUuid);
+			return;
+		}
 		
 		File file = new File(TODO_DIR, playerUuid + "_tasks.json");
 		File tempFile = new File(TODO_DIR, playerUuid + "_tasks.json.tmp");
+		
+		FocusTimerShop.LOGGER.info("[TodoManager] Saving {} tasks to file: {}", tasks.size(), file.getAbsolutePath());
 		
 		try {
 			JsonObject root = new JsonObject();
@@ -284,16 +294,21 @@ public class TodoManager {
 			
 			try (FileWriter writer = new FileWriter(tempFile)) {
 				GSON.toJson(root, writer);
+				writer.flush(); // Force write
 			}
 			
 			if (file.exists()) {
 				file.delete();
 			}
-			tempFile.renameTo(file);
+			boolean renamed = tempFile.renameTo(file);
 			
-			FocusTimerShop.LOGGER.debug("Saved {} tasks for player {}", tasks.size(), playerUuid);
+			if (renamed) {
+				FocusTimerShop.LOGGER.info("[TodoManager] Successfully saved {} tasks for player {}", tasks.size(), playerUuid);
+			} else {
+				FocusTimerShop.LOGGER.error("[TodoManager] Failed to rename temp file to {}", file.getAbsolutePath());
+			}
 		} catch (IOException e) {
-			FocusTimerShop.LOGGER.error("Failed to save tasks for player " + playerUuid, e);
+			FocusTimerShop.LOGGER.error("[TodoManager] IOException while saving tasks for player " + playerUuid, e);
 		}
 	}
 	
