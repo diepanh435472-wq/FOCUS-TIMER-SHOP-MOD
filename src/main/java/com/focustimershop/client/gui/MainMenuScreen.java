@@ -449,4 +449,11 @@ public class MainMenuScreen extends Screen {
 		RENTAL,
 		PROFILE  // v1.0.6
 	}
+	
+	/**
+	 * v1.0.7-beta - Get current tab for floating window visibility check
+	 */
+	public GuiTab getCurrentTab() {
+		return currentTab;
+	}
 }

@@ -88,6 +88,17 @@ public class FloatingWindowMenu {
 	}
 	
 	public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+		// v1.0.7-beta FIX: Only render if we're on a valid Timer screen
+		// This prevents the menu button from appearing on other screens or in-game HUD
+		net.minecraft.client.gui.screen.Screen currentScreen = client.currentScreen;
+		boolean isValidScreen = currentScreen instanceof ActiveSessionScreen || 
+		                        (currentScreen instanceof MainMenuScreen && 
+		                         ((MainMenuScreen)currentScreen).getCurrentTab() == MainMenuScreen.GuiTab.TIMER);
+		
+		if (!isValidScreen) {
+			return; // Don't render if not on Timer screens
+		}
+		
 		updatePositions();
 		
 		// Render hamburger button

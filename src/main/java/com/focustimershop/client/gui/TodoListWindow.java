@@ -130,6 +130,16 @@ public class TodoListWindow {
 	}
 	
 	public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+		// v1.0.7-beta FIX: Only render if we're on a valid Timer screen
+		net.minecraft.client.gui.screen.Screen currentScreen = client.currentScreen;
+		boolean isValidScreen = currentScreen instanceof ActiveSessionScreen || 
+		                        (currentScreen instanceof MainMenuScreen && 
+		                         ((MainMenuScreen)currentScreen).getCurrentTab() == MainMenuScreen.GuiTab.TIMER);
+		
+		if (!isValidScreen) {
+			return; // Don't render if not on Timer screens
+		}
+		
 		// Don't render if closed
 		if (windowState.getState() == FloatingWindowState.State.CLOSED) {
 			System.out.println("[TodoListWindow] Not rendering - window is CLOSED");
